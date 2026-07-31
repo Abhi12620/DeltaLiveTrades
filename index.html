@@ -1,0 +1,3845 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Options Desk · Delta Exchange</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#07090d; --surface:#0d1117; --surface2:#12161d; --surface3:#171c25;
+    --border:#1e242e; --border-soft:#161b23; --text:#e9edf2; --muted:#7d8794; --muted2:#454c57;
+    --accent:#12d6b8; --accent2:#0aa393; --accent-dim:#12d6b81e;
+    --call:#2be3a6; --call-dim:#2be3a614; --put:#ff5577; --put-dim:#ff557714;
+    --atm:#ffc247; --atm-dim:#ffc24712;
+    --strike-hl:#12d6b81c; --strike-hl-border:#12d6b855;
+    --shadow:0 1px 2px rgba(0,0,0,.5), 0 10px 28px -10px rgba(0,0,0,.6);
+    --shadow-sm:0 1px 3px rgba(0,0,0,.4);
+    --radius:12px; --radius-sm:8px;
+    --mono:'JetBrains Mono',monospace; --sans:'Plus Jakarta Sans',sans-serif;
+  }
+  [data-theme="light"]{
+    --bg:#f4f6f7; --surface:#ffffff; --surface2:#f1f4f4; --surface3:#e8ecec;
+    --border:#dee3e3; --border-soft:#e9edec; --text:#141a1c; --muted:#68757a; --muted2:#9ba7ab;
+    --accent:#0aa393; --accent2:#087d70; --accent-dim:#0aa3931a;
+    --call:#0b9d75; --call-dim:#0b9d7512; --put:#dc3f3a; --put-dim:#dc3f3a12;
+    --atm:#a8720b; --atm-dim:#a8720b12;
+    --strike-hl:#0aa39314; --strike-hl-border:#0aa39340;
+    --shadow:0 1px 2px rgba(20,20,40,.04), 0 8px 24px -8px rgba(20,20,40,.08);
+    --shadow-sm:0 1px 2px rgba(20,20,40,.06);
+  }
+  [data-theme="slate"]{
+    --bg:#0d1420; --surface:#121a28; --surface2:#192234; --surface3:#212c40;
+    --border:#28344a; --border-soft:#1f293b; --text:#e3e9f2; --muted:#7b8ba3; --muted2:#4d5b74;
+    --accent:#2ee6c8; --accent2:#1cb8a0; --accent-dim:#2ee6c81e;
+    --call:#35d99f; --call-dim:#35d99f16; --put:#ff6b6b; --put-dim:#ff6b6b16;
+    --atm:#ffcc66; --atm-dim:#ffcc6612;
+    --strike-hl:#2ee6c822; --strike-hl-border:#2ee6c855;
+    --shadow:0 1px 2px rgba(0,0,0,.35), 0 8px 24px -8px rgba(0,0,0,.45);
+    --shadow-sm:0 1px 3px rgba(0,0,0,.3);
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  html,body{background:var(--bg);color:var(--text);font-family:var(--sans);height:100%;}
+  body{transition:background .2s,color .2s;padding-bottom:48px;-webkit-font-smoothing:antialiased;}
+  body::before{content:'';position:fixed;top:0;left:0;right:0;height:3px;z-index:100;
+    background:linear-gradient(90deg,var(--accent),var(--accent2),var(--put),var(--atm),var(--accent));
+    background-size:200% 100%;animation:flow 8s linear infinite;opacity:.85;}
+  @keyframes flow{0%{background-position:0% 0;}100%{background-position:200% 0;}}
+  .app{max-width:1280px;margin:0 auto;padding:22px 18px 0;}
+
+  /* header */
+  .topbar{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:14px;margin-bottom:16px;}
+  .brand{display:flex;align-items:center;gap:11px;}
+  .brand .mark{width:36px;height:36px;border-radius:10px;background:linear-gradient(145deg,var(--accent),var(--accent2));display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-weight:700;font-size:16px;color:#04120f;flex-shrink:0;box-shadow:0 0 0 1px rgba(255,255,255,.06) inset, 0 4px 16px -4px var(--accent);}
+  .brand h1{font-size:16.5px;font-weight:800;letter-spacing:-0.2px;line-height:1.2;}
+  .brand .sub{font-size:11px;color:var(--muted);font-family:var(--mono);letter-spacing:.01em;}
+
+  .controls{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+  .seg{display:flex;background:var(--surface2);border:1px solid var(--border);border-radius:9px;padding:3px;gap:2px;}
+  .seg button{border:none;background:transparent;color:var(--muted);font-family:var(--sans);font-weight:700;font-size:12px;padding:6px 13px;border-radius:6px;cursor:pointer;transition:all .15s;}
+  .seg button.active{background:var(--accent);color:#04120f;box-shadow:var(--shadow-sm);}
+  .seg button:not(.active):hover{color:var(--text);}
+  .rate-select{display:flex;align-items:center;gap:7px;background:var(--surface2);border:1px solid var(--border);border-radius:9px;padding:5px 6px 5px 12px;}
+  .rate-select label{font-size:11px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.04em;}
+  .rate-select select{background:var(--surface3);color:var(--text);border:1px solid var(--border);border-radius:6px;font-family:var(--mono);font-weight:600;font-size:12px;padding:4px 8px;cursor:pointer;outline:none;}
+  .icon-btn{width:33px;height:33px;border-radius:9px;border:1px solid var(--border);background:var(--surface2);color:var(--text);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:14px;transition:all .15s;}
+  .icon-btn:hover{border-color:var(--accent);color:var(--accent);}
+  .icon-btn:active{transform:scale(.94);}
+
+  .view{animation:fadeIn .25s ease;}
+  @keyframes fadeIn{from{opacity:0;transform:translateY(4px);}to{opacity:1;transform:translateY(0);}}
+  .dot{width:7px;height:7px;border-radius:50%;background:var(--call);display:inline-block;flex-shrink:0;box-shadow:0 0 0 0 var(--call);animation:pulse 1.6s infinite;}
+  .dot.err{background:var(--put);animation:none;}
+  @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(43,227,166,.5);}70%{box-shadow:0 0 0 6px rgba(43,227,166,0);}100%{box-shadow:0 0 0 0 rgba(43,227,166,0);}}
+
+  /* ===== unified deck — spot, stats, status & view switch, one row ===== */
+  .deck{display:flex;align-items:center;background:var(--surface);border:1px solid var(--border);border-left:3px solid var(--accent);border-radius:var(--radius);padding:10px 18px;margin-bottom:12px;gap:0;box-shadow:var(--shadow);overflow-x:auto;overflow-y:hidden;scrollbar-width:thin;}
+
+  .deck-price{display:flex;align-items:center;gap:9px;flex-shrink:0;padding-right:18px;}
+  .deck-price-text{display:flex;flex-direction:column;gap:2px;line-height:1;}
+  .deck-price-label{font-size:9.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;font-weight:800;}
+  .deck-price-value{font-family:var(--mono);font-size:20px;font-weight:700;letter-spacing:-.3px;white-space:nowrap;transition:color .3s;}
+  #spotValue.flash-up{color:var(--call);text-shadow:0 0 16px currentColor;}
+  #spotValue.flash-down{color:var(--put);text-shadow:0 0 16px currentColor;}
+
+  .deck-sep{width:1px;align-self:stretch;background:var(--border-soft);flex-shrink:0;margin:0 18px;}
+
+  .deck-stats{display:flex;align-items:center;gap:20px;flex-shrink:0;}
+  .dstat{display:flex;flex-direction:column;gap:2px;line-height:1;white-space:nowrap;}
+  .dstat-lbl{font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;font-weight:700;}
+  .dstat-val{font-family:var(--mono);font-size:13.5px;font-weight:700;}
+  .dstat-val.call{color:var(--call);}
+  .dstat-val.put{color:var(--put);}
+  .dstat-val.atm{color:var(--atm);}
+
+  .skew-bar{width:44px;height:5px;border-radius:3px;overflow:hidden;display:flex;background:var(--surface3);flex-shrink:0;}
+  .skew-call{background:var(--call);height:100%;transition:width .4s ease;}
+  .skew-put{background:var(--put);height:100%;transition:width .4s ease;}
+
+  .deck-meta{display:flex;align-items:center;gap:5px;font-size:10.5px;color:var(--muted);font-family:var(--mono);flex-shrink:0;white-space:nowrap;}
+  .deck-meta .sep{opacity:.4;}
+
+  .deck-toggle{display:flex;background:var(--surface2);border:1px solid var(--border);border-radius:9px;padding:3px;gap:2px;margin-left:auto;flex-shrink:0;}
+  .deck-toggle button{border:none;background:transparent;color:var(--muted);font-family:var(--sans);font-weight:700;font-size:12px;padding:7px 14px;border-radius:6px;cursor:pointer;transition:all .15s;display:flex;align-items:center;gap:6px;white-space:nowrap;}
+  .deck-toggle button .ic{font-size:12px;opacity:.85;}
+  .deck-toggle button.active{background:linear-gradient(145deg,var(--accent),var(--accent2));color:#04120f;box-shadow:0 2px 10px -2px var(--accent);}
+  .deck-toggle button:not(.active):hover{color:var(--text);}
+  .nav-badge{background:var(--atm);color:#1a1200;font-size:9.5px;font-weight:800;min-width:16px;height:16px;padding:0 4px;border-radius:8px;display:inline-flex;align-items:center;justify-content:center;line-height:1;animation:navBadgePop .35s ease-out;}
+  @keyframes navBadgePop{0%{transform:scale(0.3);opacity:0;}60%{transform:scale(1.25);}100%{transform:scale(1);opacity:1;}}
+
+  .trade-toast-stack{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);z-index:9999;display:flex;flex-direction:column;gap:8px;align-items:center;pointer-events:none;}
+  .trade-toast{background:var(--surface);border:1px solid var(--border);box-shadow:0 8px 24px -6px rgba(0,0,0,.4);border-radius:10px;padding:10px 16px;font-family:var(--mono);font-size:12.5px;color:var(--text);display:flex;align-items:center;gap:10px;animation:toastIn .25s ease-out;max-width:92vw;}
+  .trade-toast .toast-icon{width:20px;height:20px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:12px;flex-shrink:0;}
+  .trade-toast.buy .toast-icon{background:var(--call-dim);color:var(--call);}
+  .trade-toast.sell .toast-icon{background:var(--put-dim);color:var(--put);}
+  .trade-toast.buy{border-color:var(--call);}
+  .trade-toast.sell{border-color:var(--put);}
+  .trade-toast.leaving{animation:toastOut .25s ease-in forwards;}
+  @keyframes toastIn{from{transform:translateY(12px);opacity:0;}to{transform:translateY(0);opacity:1;}}
+  @keyframes toastOut{from{transform:translateY(0);opacity:1;}to{transform:translateY(12px);opacity:0;}}
+
+  @media (max-width:980px){
+    .deck{flex-wrap:wrap;row-gap:12px;padding:12px 16px;}
+    .deck-sep{display:none;}
+    .deck-price{padding-right:0;}
+    .deck-toggle{margin-left:auto;}
+  }
+  @media (max-width:560px){
+    .deck-toggle{width:100%;margin-left:0;}
+    .deck-toggle button{flex:1;justify-content:center;}
+    .deck-meta{width:100%;order:5;}
+  }
+
+  /* expiry tabs — underline style */
+  .expiry-row{display:flex;gap:4px;overflow-x:auto;padding-bottom:0;margin-bottom:12px;scrollbar-width:thin;border-bottom:1px solid var(--border);}
+  .expiry-row::-webkit-scrollbar{height:4px;}
+  .expiry-pill{flex-shrink:0;font-family:var(--mono);font-size:12px;font-weight:600;padding:9px 14px;border:none;border-bottom:2px solid transparent;background:transparent;color:var(--muted);cursor:pointer;white-space:nowrap;transition:all .15s;margin-bottom:-1px;}
+  .expiry-pill:hover{color:var(--text);}
+  .expiry-pill.active{color:var(--accent);border-bottom-color:var(--accent);}
+  .expiry-pill .dte{opacity:.65;font-size:10px;margin-left:5px;}
+
+  /* main chain table */
+  .chain-wrap{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;box-shadow:var(--shadow);}
+  .table-scroll{overflow-x:auto;}
+  table{width:100%;border-collapse:separate;border-spacing:0;font-family:var(--mono);font-size:14.5px;min-width:1280px;table-layout:fixed;}
+  colgroup col.strike-cg{width:8%;}
+  colgroup col.data-cg{width:6.17%;}
+  colgroup col.ltp-cg{width:9%;}
+  thead tr.group-row th{background:var(--surface3);font-family:var(--sans);font-weight:800;font-size:11.5px;letter-spacing:.1em;text-transform:uppercase;padding:11px 10px;position:sticky;top:0;z-index:2;border-bottom:1px solid var(--border);}
+  thead tr.col-row th{background:var(--surface2);color:var(--muted);font-weight:700;font-size:11px;padding:9px 10px;border-bottom:1px solid var(--border);position:sticky;top:33px;z-index:1;text-align:right;letter-spacing:.02em;}
+  th.call-group{color:var(--call);text-align:left;box-shadow:inset 0 -2px 0 0 var(--call-dim);}
+  th.put-group{color:var(--put);text-align:right;box-shadow:inset 0 -2px 0 0 var(--put-dim);}
+  th.strike-col{text-align:center !important;background:var(--surface3);}
+  td{padding:9px 10px;text-align:right;border-bottom:1px solid var(--border-soft);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  tbody tr{transition:background .1s;}
+  tbody tr:hover td{background:var(--surface2);}
+  td.strike{font-weight:700;text-align:center;background:var(--surface2);color:var(--text);border-left:1px solid var(--border);border-right:1px solid var(--border);font-size:15px;}
+  tr.atm td.strike{background:var(--atm-dim);color:var(--atm);}
+  tr.atm td{background:var(--atm-dim);}
+  tr.atm:hover td{background:var(--atm-dim);filter:brightness(1.08);}
+  td.call-side{text-align:left;color:var(--text);}
+  td.put-side{color:var(--text);}
+  .bid{color:var(--call);font-weight:600;}
+  .ask{color:var(--put);font-weight:600;}
+  .ltp{font-weight:700;color:var(--text);}
+  td.ltp{padding-left:8px;padding-right:8px;}
+  .muted-cell{color:var(--muted2);}
+  .empty-state{padding:60px 20px;text-align:center;color:var(--muted);font-family:var(--sans);}
+  .empty-state .big{font-size:14px;font-weight:700;margin-bottom:6px;color:var(--text);}
+  .empty-state .small{font-size:12px;line-height:1.6;max-width:440px;margin:0 auto;}
+  .empty-state code{background:var(--surface2);padding:2px 6px;border-radius:4px;font-family:var(--mono);font-size:11px;}
+
+  .chain-toolbar{display:flex;justify-content:flex-end;align-items:center;gap:10px;margin-bottom:8px;}
+  .density-seg{display:flex;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:3px;gap:2px;}
+  .density-seg button{border:none;background:transparent;color:var(--muted);font-family:var(--sans);font-weight:700;font-size:11px;padding:5px 11px;border-radius:6px;cursor:pointer;}
+  .density-seg button.active{background:var(--accent);color:#04120f;}
+
+  /* ===== spread builder view ===== */
+  .spread-head{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px;}
+  .spread-builder-group{margin-bottom:34px;}
+  .spread-builder-group:last-child{margin-bottom:0;}
+  .spread-builder-group + .spread-builder-group{padding-top:26px;border-top:1px dashed var(--border);}
+  .spread-builder-num{display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:6px;background:var(--accent-dim);color:var(--accent);font-family:var(--mono);font-weight:800;font-size:11px;margin-right:8px;flex-shrink:0;}
+  .spread-head h2{font-size:16px;font-weight:800;letter-spacing:-.2px;}
+  .spread-head .hint{font-size:11px;color:var(--muted);font-family:var(--mono);}
+
+  .expiry-select-card{display:flex;align-items:center;gap:10px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px 14px;margin-bottom:14px;box-shadow:var(--shadow-sm);flex-wrap:wrap;}
+  .expiry-select-card label{font-size:11px;color:var(--muted);font-weight:800;text-transform:uppercase;letter-spacing:.05em;}
+  .expiry-select-card select{background:var(--surface3);border:1px solid var(--border);border-radius:7px;color:var(--text);font-family:var(--mono);font-weight:700;font-size:13px;padding:7px 12px;outline:none;cursor:pointer;}
+  .expiry-field{display:flex;align-items:center;gap:8px;}
+  .expiry-field.far select{border-color:var(--accent);}
+  .spread-spot{display:flex;align-items:center;gap:7px;padding-left:14px;margin-left:4px;border-left:1px solid var(--border-soft);font-family:var(--mono);font-size:12.5px;font-weight:700;color:var(--text);white-space:nowrap;}
+  .spread-spot .dot{width:6px;height:6px;}
+  .spread-spot #spreadSpotLabel{font-family:var(--sans);font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;font-weight:800;}
+  .expiry-select-card .auto-note{margin-left:auto;font-size:11px;color:var(--muted2);font-family:var(--mono);}
+  .trade-col-toggle{display:flex;align-items:center;gap:7px;cursor:pointer;user-select:none;}
+  .trade-col-toggle input{display:none;}
+  .trade-col-toggle .tct-track{width:32px;height:18px;border-radius:999px;background:var(--surface3);border:1px solid var(--border);position:relative;transition:background .15s,border-color .15s;flex-shrink:0;}
+  .trade-col-toggle .tct-thumb{position:absolute;top:1px;left:1px;width:14px;height:14px;border-radius:50%;background:var(--muted);transition:transform .15s,background .15s;}
+  .trade-col-toggle input:checked + .tct-track{background:var(--accent);border-color:var(--accent);}
+  .trade-col-toggle input:checked + .tct-track .tct-thumb{transform:translateX(14px);background:#04120f;}
+  .trade-col-toggle .tct-label{font-size:11px;color:var(--muted);font-weight:800;text-transform:uppercase;letter-spacing:.05em;white-space:nowrap;}
+  #viewSpread.hide-trade-col table.spread-table col.sp-trade,
+  #viewSpread.hide-trade-col table.spread-table .sp-trade-col{display:none;}
+
+  .side-panels{display:none;}
+
+  /* ===== compact excel-style side-by-side spread tables ===== */
+  .spread-tables-row{display:grid;grid-template-columns:1fr 1fr;gap:14px;}
+  @media (max-width:820px){.spread-tables-row{grid-template-columns:1fr;}}
+
+  .spread-block{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;box-shadow:var(--shadow);}
+  .spread-block.call-block{border-left:3px solid var(--call);}
+  .spread-block.put-block{border-left:3px solid var(--put);}
+  .spread-title{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 14px;background:var(--surface3);border-bottom:1px solid var(--border);flex-wrap:wrap;}
+  .spread-title-label{font-family:var(--sans);font-weight:800;font-size:13px;letter-spacing:.1em;}
+  .spread-title .strike-count-badge{font-family:var(--mono);font-size:10px;color:var(--muted);}
+  .inline-controls{display:flex;gap:10px;margin-left:auto;flex-wrap:wrap;}
+  .mini-field{display:flex;flex-direction:column;gap:2px;}
+  .mini-field label{font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;font-weight:700;}
+  .mini-field input{width:74px;background:var(--surface2);border:1px solid var(--border);border-radius:5px;color:var(--text);font-family:var(--mono);font-size:12px;font-weight:700;padding:4px 6px;outline:none;}
+  .mini-field input:focus{border-color:var(--accent);}
+
+  .spread-block .table-scroll{overflow:auto;max-height:600px;}
+  table.spread-table{width:100%;table-layout:fixed;border-collapse:separate;border-spacing:0;font-family:var(--mono);font-size:11.5px;min-width:0;}
+  table.spread-table colgroup col.sp-vol{width:10%;}
+  table.spread-table colgroup col.sp-strike{width:14%;}
+  table.spread-table colgroup col.sp-data{width:15%;}
+  table.spread-table colgroup col.sp-trade{width:18%;}
+  table.spread-table colgroup col.sp-alert{width:9%;}
+  .sp-trade-btns{display:inline-flex;gap:4px;justify-content:center;white-space:nowrap;}
+  .sp-trade-btn{border:1px solid var(--border);background:var(--surface2);font-family:var(--sans);font-weight:800;font-size:10px;width:21px;height:21px;line-height:1;border-radius:5px;cursor:pointer;padding:0;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;}
+  .sp-trade-btn.buy{color:var(--call);}
+  .sp-trade-btn.buy:hover{background:var(--call-dim);border-color:var(--call);}
+  .sp-trade-btn.sell{color:var(--put);}
+  .sp-trade-btn.sell:hover{background:var(--put-dim);border-color:var(--put);}
+  .sp-trade-btn:disabled{opacity:.3;cursor:not-allowed;}
+  .sp-trade-btn:disabled:hover{background:var(--surface2);border-color:var(--border);}
+  table.spread-table th{background:var(--surface2);color:var(--muted);font-weight:700;font-size:9.5px;padding:4px 6px;border-bottom:1px solid var(--border);text-align:right;letter-spacing:.02em;position:sticky;top:0;z-index:1;}
+  table.spread-table td{padding:2px 6px;line-height:1.4;text-align:right;border-bottom:1px solid var(--border-soft);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--text);}
+  table.spread-table td:last-child{text-align:center;overflow:visible;}
+  table.spread-table tbody tr.atm-row td{background:var(--atm-dim) !important;}
+  table.spread-table tbody tr.atm-row td.strike-cell{color:var(--atm);font-weight:800;}
+
+  /* ---- telegram / bell alerts ---- */
+  table.spread-table td.sp-alert-col{text-align:center;overflow:visible;}
+  table.spread-table tbody tr.alert-armed td{box-shadow:inset 0 0 0 9999px rgba(255,180,60,.08);}
+  table.spread-table tbody tr.alert-fired td{box-shadow:inset 0 0 0 9999px rgba(255,60,60,.14);}
+  .bell-btn{background:none;border:1px solid var(--border);border-radius:6px;color:var(--muted);font-size:12px;padding:1px 6px;cursor:pointer;line-height:1.6;}
+  .bell-btn:hover{border-color:var(--accent);color:var(--text);}
+  .bell-btn.set{color:#ffb43c;border-color:#ffb43c;}
+  .alert-settings-btn{border:1px solid var(--border);background:var(--surface2);color:var(--muted);font-family:var(--sans);font-weight:700;font-size:12px;padding:6px 13px;border-radius:8px;cursor:pointer;}
+  .alert-settings-btn:hover{color:var(--text);border-color:var(--accent);}
+  .alert-popover-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:110;align-items:center;justify-content:center;padding:20px;}
+  .alert-popover-overlay.open{display:flex;}
+  .alert-popover{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow);width:100%;max-width:340px;padding:18px 20px;}
+  .alert-popover h4{font-size:13px;margin-bottom:12px;font-family:var(--mono);}
+  .alert-popover .row{display:flex;gap:8px;margin-bottom:10px;}
+  .alert-popover select, .alert-popover input{flex:1;background:var(--surface3);border:1px solid var(--border);border-radius:7px;color:var(--text);font-family:var(--mono);font-size:13px;padding:7px 9px;outline:none;}
+  .alert-popover .btnrow{display:flex;gap:8px;margin-top:6px;}
+  .alert-popover button{flex:1;border:1px solid var(--border);border-radius:7px;padding:8px;font-weight:700;font-size:12.5px;cursor:pointer;font-family:var(--sans);}
+  .alert-popover .save-btn{background:var(--accent);color:#fff;border-color:var(--accent);}
+  .alert-popover .remove-btn{background:var(--surface2);color:#f2545b;}
+  .alert-popover .cancel-btn{background:var(--surface2);color:var(--muted);}
+  .settings-modal{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow);width:100%;max-width:440px;padding:18px 20px;max-height:80vh;overflow:auto;}
+  .settings-modal h4{font-family:var(--mono);font-size:13.5px;margin-bottom:4px;}
+  .settings-modal p.note{color:var(--muted);font-size:11.5px;margin-bottom:12px;line-height:1.5;}
+  .settings-modal label{display:block;font-size:11px;color:var(--muted);font-weight:800;text-transform:uppercase;letter-spacing:.05em;margin:10px 0 4px;}
+  .settings-modal input{width:100%;background:var(--surface3);border:1px solid var(--border);border-radius:7px;color:var(--text);font-family:var(--mono);font-size:13px;padding:8px 10px;outline:none;}
+  .settings-modal .btnrow{display:flex;gap:8px;margin-top:14px;}
+  .settings-modal button{border:1px solid var(--border);border-radius:7px;padding:8px 14px;font-weight:700;font-size:12.5px;cursor:pointer;font-family:var(--sans);background:var(--surface2);color:var(--muted);}
+  .settings-modal .save-btn{background:var(--accent);color:#fff;border-color:var(--accent);}
+  .settings-modal .test-btn{color:var(--accent);}
+  .alert-list-item{display:flex;align-items:center;justify-content:space-between;gap:8px;border:1px solid var(--border);border-radius:7px;padding:8px 10px;margin-top:8px;font-family:var(--mono);font-size:12px;}
+  .alert-list-item .rm{color:#f2545b;cursor:pointer;font-weight:800;padding:0 4px;}
+
+  /* ---- login gate ---- */
+  #loginGate{position:fixed;inset:0;z-index:99999;background:var(--bg);display:flex;align-items:center;justify-content:center;padding:20px;}
+  #loginGate.hidden{display:none;}
+  .login-box{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow);width:100%;max-width:320px;padding:28px 26px;}
+  .login-box h3{font-family:var(--mono);font-size:15px;margin-bottom:4px;color:var(--text);}
+  .login-box p{color:var(--muted);font-size:12px;margin-bottom:18px;}
+  .login-box label{display:block;font-size:11px;color:var(--muted);font-weight:800;text-transform:uppercase;letter-spacing:.05em;margin:12px 0 4px;}
+  .login-box input{width:100%;background:var(--surface3);border:1px solid var(--border);border-radius:7px;color:var(--text);font-family:var(--mono);font-size:13.5px;padding:9px 11px;outline:none;}
+  .login-box input:focus{border-color:var(--accent);}
+  .login-box button{width:100%;margin-top:18px;background:var(--accent);color:#fff;border:none;border-radius:7px;padding:10px;font-weight:700;font-size:13px;cursor:pointer;font-family:var(--sans);}
+  .login-box .err{color:var(--put);font-size:11.5px;margin-top:10px;display:none;}
+  .login-box .err.show{display:block;}
+
+  td.strike-cell{font-weight:700;}
+  .bid, .ask{color:var(--text);font-weight:500;}
+  .na{color:var(--muted2);}
+  .spread-warning{padding:20px;text-align:center;color:var(--muted);font-size:13px;font-family:var(--sans);line-height:1.6;}
+
+  /* clickable spread LTP cell -> opens history chart */
+  td.sp-ltp-cell{cursor:pointer;position:relative;}
+  td.sp-ltp-cell:hover{background:var(--strike-hl);text-decoration:underline;text-decoration-style:dotted;text-underline-offset:3px;}
+
+  /* ===== spread history modal ===== */
+  .sh-overlay{position:fixed;inset:0;background:rgba(0,0,0,.55);backdrop-filter:blur(2px);z-index:9998;display:flex;align-items:center;justify-content:center;padding:16px;animation:fadeIn .15s ease;}
+  .sh-modal{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);box-shadow:0 20px 60px -12px rgba(0,0,0,.6);width:100%;max-width:760px;max-height:88vh;display:flex;flex-direction:column;overflow:hidden;}
+  .sh-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding:14px 18px;border-bottom:1px solid var(--border);flex-shrink:0;}
+  .sh-title{font-size:14.5px;font-weight:800;letter-spacing:-.1px;}
+  .sh-sub{font-size:11px;color:var(--muted);font-family:var(--mono);margin-top:3px;}
+  .sh-close{width:30px;height:30px;border-radius:8px;border:1px solid var(--border);background:var(--surface2);color:var(--muted);cursor:pointer;font-size:15px;flex-shrink:0;display:flex;align-items:center;justify-content:center;transition:all .15s;}
+  .sh-close:hover{border-color:var(--put);color:var(--put);}
+  .sh-body{overflow-y:auto;padding:14px 18px 18px;}
+  .sh-range{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;}
+  .sh-range button{border:1px solid var(--border);background:var(--surface2);color:var(--muted);font-family:var(--sans);font-weight:700;font-size:13px;padding:9px 18px;border-radius:999px;cursor:pointer;transition:all .15s;}
+  .sh-range button.active{background:var(--accent);border-color:var(--accent);color:#04120f;}
+  .sh-range button:not(.active):hover{color:var(--text);border-color:var(--muted);}
+  .sh-chart-wrap{background:var(--surface2);border:1px solid var(--border-soft);border-radius:var(--radius-sm);padding:10px;margin-bottom:14px;position:relative;height:320px;}
+  .sh-chart-wrap canvas{touch-action:none;cursor:crosshair;}
+  .sh-stats{display:flex;gap:18px;flex-wrap:wrap;margin-bottom:4px;font-family:var(--mono);}
+  .sh-stat{display:flex;flex-direction:column;gap:2px;}
+  .sh-stat-lbl{font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;font-weight:700;}
+  .sh-stat-val{font-size:14px;font-weight:700;}
+  .sh-empty{padding:30px 10px;text-align:center;color:var(--muted);font-size:12.5px;font-family:var(--sans);line-height:1.6;position:absolute;inset:0;display:flex;align-items:center;justify-content:center;}
+  @media (max-width:560px){ .sh-modal{max-height:94vh;} .sh-chart-wrap{height:240px;} }
+
+  /* ===== payoff view ===== */
+  .portfolio-bar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);padding:9px 14px;margin-bottom:14px;box-shadow:var(--shadow-sm);}
+  .portfolio-bar label{font-size:11px;color:var(--muted);font-weight:800;text-transform:uppercase;letter-spacing:.05em;}
+  .portfolio-bar select{background:var(--surface3);border:1px solid var(--border);border-radius:7px;color:var(--text);font-family:var(--mono);font-weight:700;font-size:12.5px;padding:6px 10px;outline:none;cursor:pointer;min-width:140px;}
+  .portfolio-legs-count{font-size:10.5px;color:var(--muted);font-family:var(--mono);font-weight:700;background:var(--surface2);border:1px solid var(--border);padding:3px 8px;border-radius:6px;}
+  .mini-btn.danger:hover{color:var(--put);border-color:var(--put);}
+  .mini-btn.save-btn{margin-left:6px;color:var(--muted2);cursor:default;}
+  .mini-btn.save-btn.dirty{color:var(--accent-fg,#fff);background:var(--accent);border-color:var(--accent);cursor:pointer;font-weight:800;animation:saveGlow 1.6s ease-in-out infinite;}
+  .mini-btn.save-btn.dirty:hover{filter:brightness(1.1);}
+  @keyframes saveGlow{0%,100%{box-shadow:0 0 0 0 var(--accent);}50%{box-shadow:0 0 0 4px transparent;}}
+  .portfolio-saved-note{margin-left:auto;font-size:10.5px;color:var(--muted2);font-family:var(--mono);opacity:0;transition:opacity .3s;}
+  .portfolio-saved-note.show{opacity:1;}
+  .ltp-cell{display:flex;align-items:center;width:100%;}
+  .ltp-price{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;}
+  .ltp-extras{flex:0 0 auto;display:flex;align-items:center;gap:2px;}
+  .call-ltp .ltp-price{text-align:left;}
+  .call-ltp .ltp-extras{margin-left:6px;}
+  .put-ltp .ltp-price{text-align:right;}
+  .put-ltp .ltp-extras{margin-right:6px;}
+  .bs-btns{display:inline-flex;gap:2px;}
+  .bs-btn{border:1px solid var(--border);background:var(--surface2);font-family:var(--sans);font-weight:800;font-size:9px;width:16px;height:16px;line-height:1;border-radius:3px;cursor:pointer;padding:0;display:inline-flex;align-items:center;justify-content:center;opacity:.55;transition:opacity .15s;}
+  td:hover .bs-btn{opacity:1;}
+  .bs-btn.buy{color:var(--call);}
+  .bs-btn.buy:hover{background:var(--call-dim);border-color:var(--call);}
+  .bs-btn.sell{color:var(--put);}
+  .bs-btn.sell:hover{background:var(--put-dim);border-color:var(--put);}
+  .pos-badge{display:inline-block;font-family:var(--sans);font-size:9px;font-weight:800;padding:1px 5px;border-radius:4px;margin:0 4px;letter-spacing:.02em;vertical-align:middle;}
+  .pos-badge.buy{background:var(--call-dim);color:var(--call);}
+  .pos-badge.sell{background:var(--put-dim);color:var(--put);}
+
+  .payoff-layout{display:grid;grid-template-columns:1fr 300px;gap:14px;align-items:start;}
+  @media (max-width:900px){.payoff-layout{grid-template-columns:1fr;}}
+
+  .payoff-chart-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow);padding:14px 16px 10px;}
+  .payoff-live-banner{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;background:var(--surface2);border:1px solid var(--border);border-radius:9px;padding:11px 16px;margin-bottom:12px;}
+  .plb-left{display:flex;align-items:center;gap:9px;}
+  .plb-dot{width:8px;height:8px;border-radius:50%;background:var(--call);flex-shrink:0;animation:plbPulse 1.6s ease-in-out infinite;}
+  .plb-dot.paused{background:var(--muted2);animation:none;}
+  @keyframes plbPulse{0%,100%{box-shadow:0 0 0 0 rgba(120,220,150,.5);}50%{box-shadow:0 0 0 5px rgba(120,220,150,0);}}
+  .plb-label{font-size:10px;font-weight:800;letter-spacing:.08em;color:var(--muted);text-transform:uppercase;}
+  .plb-label.paused-label{color:var(--atm);cursor:pointer;text-decoration:underline;text-underline-offset:2px;}
+  .plb-spot{font-family:var(--mono);font-size:19px;font-weight:800;color:var(--text);}
+  .plb-right{display:flex;align-items:center;gap:20px;}
+  .plb-pnl-block{display:flex;flex-direction:column;align-items:flex-end;gap:1px;}
+  .plb-pnl-block.secondary{opacity:.75;}
+  .plb-pnl-label{font-size:9.5px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.03em;cursor:help;white-space:nowrap;}
+  .plb-pnl{font-family:var(--mono);font-size:22px;font-weight:800;}
+  .plb-pnl.small{font-size:15px;}
+  .plb-pnl.call{color:var(--call);}
+  .plb-pnl.put{color:var(--put);}
+  .plb-exit-note{font-size:9px;color:var(--muted2);font-family:var(--mono);text-align:right;}
+
+  .payoff-stats{display:flex;flex-wrap:wrap;gap:18px;padding-bottom:12px;margin-bottom:10px;border-bottom:1px solid var(--border-soft);}
+  .pstat{display:flex;flex-direction:column;gap:2px;line-height:1;}
+  .pstat-lbl{font-size:9.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;font-weight:800;}
+  .pstat-val{font-family:var(--mono);font-size:15px;font-weight:700;}
+  .pstat-val.call{color:var(--call);}
+  .pstat-val.put{color:var(--put);}
+  .pstat-val.atm{color:var(--atm);}
+
+  .payoff-canvas-wrap{position:relative;width:100%;height:380px;}
+  .payoff-canvas-scroll{position:absolute;inset:0;overflow-x:auto;overflow-y:hidden;-webkit-overflow-scrolling:touch;}
+  .payoff-canvas-scroll::-webkit-scrollbar{height:8px;}
+  .payoff-canvas-scroll::-webkit-scrollbar-thumb{background:var(--border);border-radius:4px;}
+  .payoff-canvas-inner{height:100%;position:relative;}
+  #payoffCanvas{height:100%;display:block;cursor:grab;touch-action:pan-x;}
+  #payoffCanvas.dragging{cursor:grabbing;}
+  .payoff-empty{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;text-align:center;color:var(--muted);font-size:12.5px;padding:20px;pointer-events:none;}
+  .payoff-canvas-hint{font-size:10.5px;color:var(--muted2);font-family:var(--mono);text-align:center;padding-top:6px;}
+  .payoff-zoom-controls{position:absolute;top:6px;right:6px;display:flex;gap:4px;z-index:2;}
+  .payoff-zoom-btn{width:24px;height:24px;border-radius:6px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-family:var(--mono);font-size:13px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;}
+  .payoff-zoom-btn:hover{background:var(--surface3);}
+
+  .payoff-legs-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow);overflow:hidden;}
+  .payoff-legs-head{display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:var(--surface3);border-bottom:1px solid var(--border);font-family:var(--sans);font-weight:800;font-size:12.5px;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);}
+  .mini-btn{border:1px solid var(--border);background:var(--surface2);color:var(--muted);font-family:var(--sans);font-weight:700;font-size:10.5px;padding:4px 9px;border-radius:6px;cursor:pointer;text-transform:none;letter-spacing:0;}
+  .mini-btn:hover{color:var(--put);border-color:var(--put);}
+  .payoff-legs-list{max-height:460px;overflow-y:auto;}
+  .leg-row{display:flex;align-items:flex-start;gap:8px;padding:10px 12px;border-bottom:1px solid var(--border-soft);font-family:var(--mono);font-size:12px;}
+  .leg-row.buy{border-left:3px solid var(--call);}
+  .leg-row.sell{border-left:3px solid var(--put);}
+  .leg-tag{font-size:9.5px;font-weight:800;padding:2px 6px;border-radius:4px;text-transform:uppercase;flex-shrink:0;margin-top:1px;}
+  .leg-row.buy .leg-tag{background:var(--call-dim);color:var(--call);}
+  .leg-row.sell .leg-tag{background:var(--put-dim);color:var(--put);}
+  .leg-info{flex:1;min-width:0;line-height:1.4;}
+  .leg-info .strike-line{font-weight:700;color:var(--text);margin-bottom:2px;}
+  .leg-info .prem-line{font-size:10.5px;color:var(--muted);display:flex;align-items:center;flex-wrap:wrap;gap:5px;}
+  .leg-premium{width:64px;background:var(--surface2);border:1px solid var(--border);border-radius:5px;color:var(--text);font-family:var(--mono);font-size:11px;padding:3px 5px;text-align:center;outline:none;}
+  .leg-premium:focus{border-color:var(--accent);}
+  .leg-qty-wrap{display:flex;flex-direction:column;align-items:center;gap:2px;flex-shrink:0;margin-top:1px;}
+  .leg-qty-label{font-size:8px;color:var(--muted2);text-transform:uppercase;letter-spacing:.04em;font-weight:700;}
+  .leg-qty{width:52px;background:var(--surface2);border:1px solid var(--border);border-radius:5px;color:var(--text);font-family:var(--mono);font-size:12px;font-weight:700;padding:4px 3px;text-align:center;outline:none;}
+  .leg-qty:focus{border-color:var(--accent);}
+  .leg-remove{border:none;background:transparent;color:var(--muted2);font-size:16px;cursor:pointer;padding:2px 2px;line-height:1;flex-shrink:0;margin-top:1px;}
+  .leg-remove:hover{color:var(--put);}
+
+  .portfolio-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow);overflow:hidden;margin-top:14px;}
+  .portfolio-card .payoff-legs-head .hint{font-size:10.5px;color:var(--muted2);}
+  table.portfolio-table{width:100%;border-collapse:collapse;font-family:var(--mono);font-size:12.5px;}
+  table.portfolio-table th{background:var(--surface2);color:var(--muted);font-weight:700;font-size:10.5px;padding:8px 10px;border-bottom:1px solid var(--border);text-align:right;letter-spacing:.03em;}
+  table.portfolio-table td{padding:8px 10px;text-align:right;border-bottom:1px solid var(--border-soft);white-space:nowrap;}
+  table.portfolio-table tfoot td{border-top:1px solid var(--border);border-bottom:none;font-weight:800;padding-top:10px;}
+  .side-chip{font-size:9.5px;font-weight:800;padding:2px 7px;border-radius:4px;text-transform:uppercase;}
+  .side-chip.buy{background:var(--call-dim);color:var(--call);}
+  .side-chip.sell{background:var(--put-dim);color:var(--put);}
+  .pnl-pos{color:var(--call);font-weight:700;}
+  .pnl-neg{color:var(--put);font-weight:700;}
+  .stale-tag{font-size:8.5px;font-weight:800;color:var(--atm);background:var(--atm-dim);padding:1px 5px;border-radius:4px;text-transform:uppercase;letter-spacing:.03em;cursor:help;}
+  .und-tag{font-size:8.5px;font-weight:800;color:var(--muted);background:var(--surface3);padding:1px 5px;border-radius:4px;}
+
+  footer{text-align:center;color:var(--muted2);font-size:11px;font-family:var(--mono);margin-top:16px;}
+
+  /* ===== analytics view ===== */
+  .analytics-toggle{display:inline-flex;gap:4px;background:var(--surface2);border:1px solid var(--border);border-radius:9px;padding:3px;margin-bottom:14px;}
+  .analytics-toggle button{border:none;background:transparent;color:var(--muted);font-family:var(--sans);font-weight:800;font-size:12px;padding:6px 16px;border-radius:6px;cursor:pointer;letter-spacing:.02em;}
+  .analytics-toggle button.active{background:var(--surface);color:var(--text);box-shadow:var(--shadow-sm);}
+  .analytics-controls{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:0;}
+  .analytics-controls .analytics-toggle{margin-bottom:14px;}
+  .analytics-expiry{display:flex;align-items:center;gap:8px;margin-bottom:14px;}
+  .analytics-expiry label{font-size:11px;color:var(--muted);font-weight:800;text-transform:uppercase;letter-spacing:.05em;}
+  .analytics-expiry select{background:var(--surface3);border:1px solid var(--border);border-radius:7px;color:var(--text);font-family:var(--mono);font-weight:700;font-size:12.5px;padding:6px 10px;outline:none;cursor:pointer;min-width:150px;}
+
+  .oi-heatmap-wrap{position:relative;min-height:120px;}
+  table.oi-table{width:100%;border-collapse:separate;border-spacing:0;font-family:var(--mono);font-size:12px;}
+  table.oi-table thead th{background:var(--surface2);color:var(--muted);font-weight:700;font-size:10px;padding:7px 10px;border-bottom:1px solid var(--border);letter-spacing:.03em;position:sticky;top:0;z-index:1;}
+  table.oi-table td{padding:5px 10px;border-bottom:1px solid var(--border-soft);vertical-align:middle;}
+  .oi-bar-row{display:flex;align-items:center;gap:8px;}
+  .oi-bar-row.call{flex-direction:row-reverse;}
+  .oi-bar-track{flex:1;height:16px;background:var(--surface2);border-radius:3px;overflow:hidden;position:relative;}
+  .oi-bar-fill{height:100%;border-radius:3px;transition:width .3s;}
+  .oi-bar-fill.call{background:linear-gradient(90deg, var(--call-dim), var(--call));}
+  .oi-bar-fill.put{background:linear-gradient(90deg, var(--put), var(--put-dim));}
+  .oi-bar-val{font-size:11px;font-weight:700;min-width:52px;text-align:right;}
+  .oi-bar-row.call .oi-bar-val{text-align:right;}
+  .oi-bar-row.put .oi-bar-val{text-align:left;min-width:52px;}
+  tr.oi-maxpain td{background:var(--strike-hl);}
+  tr.oi-atm .oi-strike{color:var(--atm);font-weight:800;}
+  .oi-strike{text-align:center;font-weight:700;white-space:nowrap;}
+
+  @media (max-width:640px){
+    .deck-price-value{font-size:18px;}
+    .deck{padding:10px 12px;}
+    table{font-size:12.5px;}
+    .deck-toggle button{padding:9px 14px;font-size:12px;}
+    .side-panel-body{flex-direction:column;}
+  }
+</style>
+</head>
+<body data-theme="dark">
+<div id="loginGate">
+  <div class="login-box">
+    <h3>Δ Options Desk</h3>
+    <p>Enter your credentials to continue</p>
+    <label>User ID</label>
+    <input type="text" id="loginId" autocomplete="username">
+    <label>Password</label>
+    <input type="password" id="loginPass" autocomplete="current-password">
+    <button id="loginBtn">Login</button>
+    <div class="err" id="loginErr">Invalid ID or password</div>
+  </div>
+</div>
+<script>
+(function(){
+  var AUTH_ID = 'ADMIN';
+  var AUTH_PASS = '102030';
+  var gate = document.getElementById('loginGate');
+  if(sessionStorage.getItem('odd_auth') === 'true'){ gate.classList.add('hidden'); return; }
+  function tryLogin(){
+    var id = document.getElementById('loginId').value.trim();
+    var pass = document.getElementById('loginPass').value;
+    if(id === AUTH_ID && pass === AUTH_PASS){
+      sessionStorage.setItem('odd_auth','true');
+      gate.classList.add('hidden');
+    } else {
+      document.getElementById('loginErr').classList.add('show');
+    }
+  }
+  document.getElementById('loginBtn').addEventListener('click', tryLogin);
+  document.getElementById('loginPass').addEventListener('keydown', function(e){ if(e.key==='Enter') tryLogin(); });
+  document.getElementById('loginId').addEventListener('keydown', function(e){ if(e.key==='Enter') tryLogin(); });
+  document.getElementById('loginId').focus();
+  window.__oddLogout = function(){
+    sessionStorage.removeItem('odd_auth');
+    document.getElementById('loginId').value = '';
+    document.getElementById('loginPass').value = '';
+    document.getElementById('loginErr').classList.remove('show');
+    gate.classList.remove('hidden');
+    document.getElementById('loginId').focus();
+  };
+})();
+</script>
+<div class="app">
+
+  <div class="topbar">
+    <div class="brand">
+      <div class="mark">Δ</div>
+      <div>
+        <h1>Options Desk</h1>
+        <div class="sub" id="exchangeLabel">delta.exchange · india</div>
+      </div>
+    </div>
+    <div class="controls">
+      <div class="seg" id="underlyingSeg">
+        <button data-u="BTC" class="active">BTC</button>
+        <button data-u="ETH">ETH</button>
+        <button data-u="XAUT">XAUT</button>
+      </div>
+      <div class="seg" id="themeSeg">
+        <button data-t="dark" class="active">Dark</button>
+        <button data-t="slate">Slate</button>
+        <button data-t="light">Light</button>
+      </div>
+      <div class="rate-select" title="Prices are live via WebSocket always. This only re-checks for newly listed strikes/expiries.">
+        <label for="rateInput">Resync</label>
+        <select id="rateInput">
+          <option value="60000">1m</option>
+          <option value="300000" selected>5m</option>
+          <option value="600000">10m</option>
+          <option value="1800000">30m</option>
+        </select>
+      </div>
+      <button class="icon-btn" id="refreshBtn" title="Force resync now">⟳</button>
+      <button class="icon-btn" id="pauseBtn" title="Pause live feed">⏸</button>
+      <button class="icon-btn" id="logoutBtn" title="Logout">⏻</button>
+    </div>
+  </div>
+
+  <div class="deck">
+    <div class="deck-price">
+      <span class="dot" id="statusDot"></span>
+      <div class="deck-price-text">
+        <span class="deck-price-label" id="spotLabel">BTC Future</span>
+        <span class="deck-price-value" id="spotValue">—</span>
+      </div>
+    </div>
+
+    <div class="deck-sep"></div>
+
+    <div class="deck-stats">
+      <div class="dstat"><span class="dstat-lbl">Call Vol</span><span class="dstat-val call" id="sumCallVol">—</span></div>
+      <div class="dstat"><span class="dstat-lbl">Put Vol</span><span class="dstat-val put" id="sumPutVol">—</span></div>
+      <div class="skew-bar" id="skewBar" title="Call / put volume skew">
+        <div class="skew-call" id="skewCall" style="width:50%"></div>
+        <div class="skew-put" id="skewPut" style="width:50%"></div>
+      </div>
+      <div class="dstat"><span class="dstat-lbl">PCR</span><span class="dstat-val" id="sumPcr">—</span></div>
+      <div class="dstat"><span class="dstat-lbl">ATM</span><span class="dstat-val atm" id="sumAtm">—</span></div>
+      <div class="dstat"><span class="dstat-lbl">Expiry</span><span class="dstat-val" id="sumExpiry">—</span></div>
+    </div>
+
+    <div class="deck-sep"></div>
+
+    <div class="deck-meta">
+      <span id="statusText">connecting…</span>
+      <span class="sep">·</span>
+      <span id="lastUpdate">last update —</span>
+      <span class="sep">·</span>
+      <span id="rowCount">0 strikes</span>
+    </div>
+
+    <div class="deck-toggle" id="viewToggle">
+      <button data-view="chain" class="active"><span class="ic">▤</span>Chain</button>
+      <button data-view="spread"><span class="ic">⇄</span>Spread</button>
+      <button data-view="payoff"><span class="ic">📈</span>Payoff<span class="nav-badge" id="payoffNavBadge" style="display:none;"></span></button>
+      <button data-view="analytics"><span class="ic">📊</span>Analytics</button>
+    </div>
+  </div>
+
+  <!-- ============ VIEW: OPTION CHAIN ============ -->
+  <div class="view" id="viewChain">
+    <div class="expiry-row" id="expiryRow"></div>
+
+    <div class="chain-toolbar">
+      <div class="density-seg" id="densitySeg">
+        <button data-d="comfortable" class="active">Comfortable</button>
+        <button data-d="compact">Compact</button>
+      </div>
+    </div>
+
+    <div class="chain-wrap">
+      <div class="table-scroll">
+        <table id="chainTable">
+          <colgroup>
+            <col class="data-cg"><col class="data-cg"><col class="data-cg"><col class="data-cg"><col class="ltp-cg"><col class="data-cg"><col class="data-cg">
+            <col class="strike-cg">
+            <col class="data-cg"><col class="data-cg"><col class="ltp-cg"><col class="data-cg"><col class="data-cg"><col class="data-cg"><col class="data-cg">
+          </colgroup>
+          <thead>
+            <tr class="group-row">
+              <th colspan="7" class="call-group">CALLS</th>
+              <th class="strike-col">STRIKE</th>
+              <th colspan="7" class="put-group">PUTS</th>
+            </tr>
+            <tr class="col-row">
+              <th style="text-align:left">VOL</th>
+              <th style="text-align:left">IV%</th>
+              <th style="text-align:left">DELTA</th>
+              <th style="text-align:left">THETA</th>
+              <th style="text-align:left">LTP</th>
+              <th style="text-align:left">BID</th>
+              <th style="text-align:left">ASK</th>
+              <th class="strike-col"> </th>
+              <th style="text-align:right">BID</th>
+              <th style="text-align:right">ASK</th>
+              <th style="text-align:right">LTP</th>
+              <th style="text-align:right">THETA</th>
+              <th style="text-align:right">DELTA</th>
+              <th style="text-align:right">IV%</th>
+              <th style="text-align:right">VOL</th>
+            </tr>
+          </thead>
+          <tbody id="chainBody">
+            <tr><td colspan="15"><div class="empty-state"><div class="big">Loading options chain…</div></div></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ VIEW: SPREAD BUILDER ============ -->
+  <div class="view" id="viewSpread" style="display:none;">
+    <div class="expiry-select-card" id="spreadGlobalBar">
+      <label class="trade-col-toggle" title="Show/hide the Buy/Sell trade column">
+        <input type="checkbox" id="tradeColToggle" checked>
+        <span class="tct-track"><span class="tct-thumb"></span></span>
+        <span class="tct-label">Trade col (all)</span>
+      </label>
+      <button class="alert-settings-btn" id="alertSettingsBtn" style="margin-left:auto;">🔔 Alerts</button>
+      <button class="alert-settings-btn" id="liveTradeSettingsBtn" title="Configure live order execution backend">🔴 Live orders</button>
+    </div>
+    <div id="spreadBuildersRoot"></div>
+  </div>
+
+  <!-- ============ VIEW: PAYOFF ============ -->
+  <div class="view" id="viewPayoff" style="display:none;">
+    <div class="spread-head">
+      <h2>Multi-Leg Payoff</h2>
+      <span class="hint">Use the B/S buttons next to any LTP to add legs · changes stay as a draft until you hit Save · drag the spot marker on the chart</span>
+    </div>
+
+    <div class="portfolio-bar">
+      <label for="portfolioSelect">Portfolio</label>
+      <select id="portfolioSelect"></select>
+      <span class="portfolio-legs-count" id="portfolioLegsCount"></span>
+      <button class="mini-btn" id="newPortfolioBtn">+ New</button>
+      <button class="mini-btn" id="renamePortfolioBtn">Rename</button>
+      <button class="mini-btn" id="duplicatePortfolioBtn">Duplicate</button>
+      <button class="mini-btn danger" id="deletePortfolioBtn">Delete</button>
+      <button class="mini-btn save-btn" id="savePortfolioBtn">Saved</button>
+      <span class="portfolio-saved-note" id="portfolioSavedNote"></span>
+    </div>
+
+    <div class="payoff-layout">
+      <div class="payoff-chart-card">
+        <div class="payoff-live-banner" id="payoffLiveBanner">
+          <div class="plb-left">
+            <span class="plb-dot" id="plbDot"></span>
+            <span class="plb-label" id="plbLabel">LIVE</span>
+            <span class="plb-spot" id="plbSpot">—</span>
+          </div>
+          <div class="plb-right">
+            <div class="plb-pnl-block">
+              <span class="plb-pnl-label" title="What you'd actually get with a Market order right now: sells hit the bid, buys-to-close hit the ask — spread cost included.">Live P&amp;L (close now) ⓘ</span>
+              <span class="plb-pnl" id="plbPnlLive">—</span>
+            </div>
+            <div class="plb-pnl-block secondary">
+              <span class="plb-pnl-label" title="What this basket is worth if the underlying stays here until expiry — no time value left, no bid-ask cost.">Expiry P&amp;L (at this price)</span>
+              <span class="plb-pnl small" id="plbPnlExpiry">—</span>
+            </div>
+          </div>
+        </div>
+        <div class="payoff-stats" id="payoffStats">
+          <div class="pstat"><span class="pstat-lbl">Net Premium</span><span class="pstat-val" id="pNetPremium">—</span></div>
+          <div class="pstat"><span class="pstat-lbl">Max Profit</span><span class="pstat-val call" id="pMaxProfit">—</span></div>
+          <div class="pstat"><span class="pstat-lbl">Max Loss</span><span class="pstat-val put" id="pMaxLoss">—</span></div>
+          <div class="pstat"><span class="pstat-lbl">Breakeven</span><span class="pstat-val atm" id="pBreakeven">—</span></div>
+          <div class="pstat"><span class="pstat-lbl">P&amp;L @ Spot</span><span class="pstat-val" id="pAtSpot">—</span></div>
+        </div>
+        <div class="payoff-canvas-wrap">
+          <div class="payoff-zoom-controls">
+            <button type="button" class="payoff-zoom-btn" id="payoffZoomOut" title="Zoom out">−</button>
+            <button type="button" class="payoff-zoom-btn" id="payoffZoomIn" title="Zoom in">+</button>
+            <button type="button" class="payoff-zoom-btn" id="payoffZoomReset" title="Reset zoom">⤾</button>
+          </div>
+          <div class="payoff-canvas-scroll" id="payoffCanvasScroll">
+            <div class="payoff-canvas-inner" id="payoffCanvasInner">
+              <canvas id="payoffCanvas"></canvas>
+            </div>
+          </div>
+          <div class="payoff-empty" id="payoffEmptyMsg">No legs yet — click any LTP price in the Chain view to add a leg here.</div>
+        </div>
+        <div class="payoff-canvas-hint">Drag the amber marker to move spot · scroll/pinch or use +/− to zoom the strike axis</div>
+      </div>
+
+      <div class="payoff-legs-card">
+        <div class="payoff-legs-head">
+          <span>Legs</span>
+          <button class="mini-btn" id="clearLegsBtn">Clear legs</button>
+        </div>
+        <div class="payoff-legs-list" id="payoffLegsList">
+          <div class="empty-state" style="padding:30px 12px;"><div class="small">Legs you add will show up here with qty controls.</div></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="portfolio-card">
+      <div class="payoff-legs-head">
+        <span>Portfolio · Live Mark-to-Market</span>
+        <span class="hint" style="text-transform:none;font-weight:600;">valued off current LTP/mark from the live chain</span>
+      </div>
+      <div class="table-scroll">
+        <table class="portfolio-table" id="portfolioTable">
+          <thead><tr>
+            <th style="text-align:left">SIDE</th>
+            <th style="text-align:left">STRIKE</th>
+            <th>EXPIRY</th>
+            <th>QTY</th>
+            <th>ENTRY</th>
+            <th title="Bid (for longs) / Ask (for shorts) — what you'd get closing via Market order now">EXIT PX</th>
+            <th title="Mark-to-market using the exit price, not mid — includes spread cost">P&amp;L</th>
+            <th>P&amp;L %</th>
+          </tr></thead>
+          <tbody id="portfolioBody">
+            <tr><td colspan="8"><div class="empty-state" style="padding:24px;"><div class="small">No open positions</div></div></td></tr>
+          </tbody>
+          <tfoot>
+            <tr id="portfolioTotalsRow">
+              <td colspan="6" style="text-align:right;font-weight:800;">TOTAL</td>
+              <td id="portfolioTotalPnl">—</td>
+              <td id="portfolioTotalPnlPct">—</td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ VIEW: ANALYTICS ============ -->
+  <div class="view" id="viewAnalytics" style="display:none;">
+    <div class="spread-head">
+      <h2>Analytics</h2>
+      <span class="hint">IV skew and open-interest buildup across strikes</span>
+    </div>
+
+    <div class="analytics-controls">
+      <div class="analytics-toggle" id="analyticsToggle">
+        <button data-atab="skew" class="active">IV Skew</button>
+        <button data-atab="oi">OI Heatmap</button>
+      </div>
+      <div class="analytics-expiry">
+        <label for="analyticsExpirySelect">Expiry</label>
+        <select id="analyticsExpirySelect"></select>
+      </div>
+    </div>
+
+    <!-- IV Skew sub-view -->
+    <div class="analytics-panel" id="panelSkew">
+      <div class="payoff-chart-card">
+        <div class="payoff-stats" id="skewStats">
+          <div class="pstat"><span class="pstat-lbl">ATM IV</span><span class="pstat-val atm" id="skAtmIv">—</span></div>
+          <div class="pstat"><span class="pstat-lbl">Call Skew (25Δ)</span><span class="pstat-val call" id="skCallSkew">—</span></div>
+          <div class="pstat"><span class="pstat-lbl">Put Skew (25Δ)</span><span class="pstat-val put" id="skPutSkew">—</span></div>
+          <div class="pstat"><span class="pstat-lbl">Skew Shape</span><span class="pstat-val" id="skShape">—</span></div>
+        </div>
+        <div class="payoff-canvas-wrap" style="height:340px;">
+          <canvas id="skewCanvas"></canvas>
+          <div class="payoff-empty" id="skewEmptyMsg">No IV data for this expiry yet.</div>
+        </div>
+        <div class="payoff-canvas-hint">Amber = calls · Blue = puts · dashed line = current spot</div>
+      </div>
+    </div>
+
+    <!-- OI Heatmap sub-view -->
+    <div class="analytics-panel" id="panelOi" style="display:none;">
+      <div class="payoff-chart-card">
+        <div class="payoff-stats" id="oiStats">
+          <div class="pstat"><span class="pstat-lbl">Max Pain</span><span class="pstat-val atm" id="oiMaxPain">—</span></div>
+          <div class="pstat"><span class="pstat-lbl">Total Call OI</span><span class="pstat-val call" id="oiTotalCall">—</span></div>
+          <div class="pstat"><span class="pstat-lbl">Total Put OI</span><span class="pstat-val put" id="oiTotalPut">—</span></div>
+          <div class="pstat"><span class="pstat-lbl">PCR (OI)</span><span class="pstat-val" id="oiPcr">—</span></div>
+        </div>
+        <div class="oi-heatmap-wrap">
+          <div class="table-scroll">
+            <table class="oi-table" id="oiTable">
+              <thead><tr>
+                <th style="text-align:right">CALL OI</th>
+                <th style="text-align:center">STRIKE</th>
+                <th style="text-align:left">PUT OI</th>
+              </tr></thead>
+              <tbody id="oiTableBody"></tbody>
+            </table>
+          </div>
+          <div class="payoff-empty" id="oiEmptyMsg" style="display:none;">No open-interest data for this expiry yet.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <footer>live prices via WebSocket (wss://socket.india.delta.exchange) · symbol list resynced via REST · not investment advice</footer>
+</div>
+
+<div class="alert-popover-overlay" id="alertPopoverOverlay">
+  <div class="alert-popover">
+    <h4 id="alertPopoverTitle">Set alert</h4>
+    <div class="row">
+      <select id="alertField">
+        <option value="ltp">LTP</option>
+        <option value="bid">BID</option>
+        <option value="ask">ASK</option>
+      </select>
+      <select id="alertOp">
+        <option value="gte">≥</option>
+        <option value="lte">≤</option>
+      </select>
+      <input type="number" id="alertValue" placeholder="value" step="any">
+    </div>
+    <div class="btnrow">
+      <button class="save-btn" id="alertSaveBtn">Save</button>
+      <button class="remove-btn" id="alertRemoveBtn" style="display:none;">Remove</button>
+      <button class="cancel-btn" id="alertCancelBtn">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<div class="alert-popover-overlay" id="settingsOverlay">
+  <div class="settings-modal">
+    <h4>Notification settings</h4>
+    <p class="note">Alerts fire from your browser while this tab is open and the dashboard is actively polling. On mobile Chrome, keep the tab active (screen on) for checks to run — background/locked tabs are throttled by the OS, so neither browser notifications nor Telegram messages will fire while fully backgrounded. Telegram delivers as a real push once the message is sent, which is more noticeable than an in-page notification.</p>
+    <label>Telegram bot token</label>
+    <input type="text" id="tgToken" placeholder="123456:ABC-...">
+    <label>Telegram chat ID</label>
+    <input type="text" id="tgChatId" placeholder="e.g. 987654321">
+    <p class="note" style="margin-top:8px;margin-bottom:0;">Create a bot via @BotFather, then message your bot once and fetch <span style="font-family:var(--mono)">https://api.telegram.org/bot&lt;token&gt;/getUpdates</span> to find your chat id.</p>
+    <div id="activeAlertsList"></div>
+    <div class="btnrow">
+      <button class="test-btn" id="tgTestBtn">Send test message</button>
+      <button class="save-btn" id="settingsSaveBtn">Save</button>
+      <button id="settingsCloseBtn">Close</button>
+    </div>
+  </div>
+</div>
+
+<div class="alert-popover-overlay" id="orderQtyOverlay">
+  <div class="alert-popover">
+    <h4 id="orderQtyTitle">Place spread order</h4>
+    <p class="note" id="orderQtyLegs" style="color:var(--muted);font-size:11.5px;margin-bottom:10px;line-height:1.5;"></p>
+    <div class="row">
+      <input type="number" id="orderQtyInput" placeholder="lots e.g. 100" min="1" step="1">
+    </div>
+    <p class="note" id="orderQtyErr" style="color:var(--put);display:none;margin-bottom:8px;"></p>
+    <div class="btnrow">
+      <button class="save-btn" id="orderQtyConfirmBtn">Place market order</button>
+      <button class="cancel-btn" id="orderQtyCancelBtn">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<div class="alert-popover-overlay" id="liveTradeSettingsOverlay">
+  <div class="settings-modal">
+    <h4>Live order execution settings</h4>
+    <p class="note">This dashboard is static (GitHub Pages) — it cannot safely hold your Delta API secret. Orders are placed through a small backend you deploy separately (Render), which holds the real Delta keys. This dashboard only needs the backend's URL and the app passphrase you set on it.</p>
+    <label>Backend URL</label>
+    <input type="text" id="liveBackendUrl" placeholder="https://your-app.onrender.com">
+    <label>App passphrase (X-App-Secret)</label>
+    <input type="text" id="liveAppSecret" placeholder="same value as APP_SECRET on Render">
+    <div class="btnrow">
+      <button class="test-btn" id="liveTestBtn">Test connection</button>
+      <button class="save-btn" id="liveSaveBtn">Save</button>
+      <button id="liveCloseBtn">Close</button>
+    </div>
+  </div>
+</div>
+
+<div class="trade-toast-stack" id="tradeToastStack"></div>
+
+<div class="sh-overlay" id="shOverlay" style="display:none;">
+  <div class="sh-modal" onclick="event.stopPropagation()">
+    <div class="sh-head">
+      <div>
+        <div class="sh-title" id="shTitle">Spread History</div>
+        <div class="sh-sub" id="shSub">—</div>
+      </div>
+      <button class="sh-close" id="shCloseBtn" title="Close">✕</button>
+    </div>
+    <div class="sh-body">
+      <div class="sh-range" id="shRange">
+        <button data-res="5m" data-days="1">1D</button>
+        <button data-res="15m" data-days="5">5D</button>
+        <button data-res="1h" data-days="30">1M</button>
+        <button data-res="1d" data-days="180">6M</button>
+      </div>
+      <div class="sh-stats" id="shStats"></div>
+      <div class="sh-chart-wrap" id="shChartWrap">
+        <canvas id="shCanvas"></canvas>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
+<script>
+const state = {
+  underlying: localStorage.getItem('doc_underlying') || 'BTC',
+  theme: localStorage.getItem('doc_theme') || 'dark',
+  view: localStorage.getItem('doc_view') || 'chain',
+  density: localStorage.getItem('doc_density') || 'comfortable',
+  expiries: [],
+  activeExpiry: null,
+  raw: [],
+  spot: null,
+  paused: false,
+  timer: null,
+  payoffSpotOverride: null, // set while user drags the marker; null = follow live spot
+  payoffZoom: 1, // 1 = fit-to-width; >1 widens the chart so the wrapper becomes horizontally scrollable
+  alerts: JSON.parse(localStorage.getItem('doc_alerts') || '[]'),
+  tgToken: localStorage.getItem('doc_tg_token') || '',
+  tgChatId: localStorage.getItem('doc_tg_chatid') || '',
+};
+
+// ---- portfolios: named, saved sets of payoff legs ----
+// storage shape: { "<id>": { name, legs: [...] } }
+function loadPortfolios(){
+  let stored = null;
+  try{ stored = JSON.parse(localStorage.getItem('doc_portfolios') || 'null'); }catch(e){}
+  if(stored && typeof stored === 'object' && Object.keys(stored).length){
+    return stored;
+  }
+  // migrate the old single-portfolio storage (doc_payoff_legs) into a
+  // first "Default" portfolio so existing saved legs aren't lost
+  const oldRaw = JSON.parse(localStorage.getItem('doc_payoff_legs') || '[]');
+  const migratedLegs = oldRaw.map(l=>{
+    if(l.avgPremium !== undefined) return { ...l, underlying: l.underlying || state.underlying };
+    return { id:l.id, type:l.type, strike:l.strike, expiry:l.expiry, underlying: state.underlying,
+             qty: l.side==='sell' ? -Math.abs(l.qty||1) : Math.abs(l.qty||1),
+             avgPremium: l.premium || 0 };
+  });
+  return { 'pf_default': { name: 'Default', legs: migratedLegs } };
+}
+state.portfolios = loadPortfolios();
+state.activePortfolioId = localStorage.getItem('doc_active_portfolio');
+if(!state.activePortfolioId || !state.portfolios[state.activePortfolioId]){
+  state.activePortfolioId = Object.keys(state.portfolios)[0];
+}
+// state.payoffLegs always points at the active portfolio's legs array —
+// every existing function that reads/mutates state.payoffLegs keeps working
+// unchanged; this getter/setter just redirects it into state.portfolios
+Object.defineProperty(state, 'payoffLegs', {
+  get(){ return state.portfolios[state.activePortfolioId].legs; },
+  set(v){ state.portfolios[state.activePortfolioId].legs = v; }
+});
+
+// ======================================================================
+// SPREAD BUILDERS — three independent, stacked instances (1, 2, 3).
+// Each has its own mode (ratio/calendar), expiries, gap/ratio/steps per
+// side, and localStorage namespace, so they never clash. The Buy/Sell
+// trade column and its wiring to tradeSpreadBasket/payoff are identical
+// to the original single builder — just parameterized by builder id.
+// ======================================================================
+const BUILDER_IDS = [1, 2, 3];
+
+function buildSpreadBuilderHTML(n){
+  return `
+  <div class="spread-builder-group" data-builder="${n}">
+    <div class="spread-head">
+      <h2><span class="spread-builder-num">${n}</span><span id="spreadBuilderTitle${n}">Ratio Spread Builder</span></h2>
+      <span class="hint" id="spreadBuilderHint${n}">Spread BID = Strike1.Ask − Strike2.Bid×Ratio · Spread ASK = Strike1.Bid − Strike2.Ask×Ratio</span>
+    </div>
+
+    <div class="expiry-select-card">
+      <div class="seg" id="spreadModeToggle${n}">
+        <button data-mode="ratio" class="active">Ratio</button>
+        <button data-mode="calendar">Calendar / Diagonal</button>
+      </div>
+      <div class="expiry-field far" id="expiryField2_${n}" style="display:none;">
+        <label for="spreadExpiry2_${n}">Far Expiry</label>
+        <select id="spreadExpiry2_${n}"></select>
+      </div>
+      <div class="expiry-field">
+        <label id="spreadExpiryLabel${n}" for="spreadExpiry_${n}">Expiry</label>
+        <select id="spreadExpiry_${n}"></select>
+      </div>
+      <span class="spread-spot"><span class="dot" id="spreadStatusDot${n}"></span><span id="spreadSpotLabel${n}">BTC Future</span> <span id="spreadSpotValue${n}">—</span></span>
+      <span class="auto-note">strikes auto-pulled from live chain</span>
+    </div>
+
+    <div class="spread-tables-row">
+      <div class="spread-block call-block">
+        <div class="spread-title">
+          <span class="spread-title-label" style="color:var(--call)">CALL</span>
+          <span class="strike-count-badge" id="callStrikeCount${n}">0 strikes</span>
+          <div class="inline-controls">
+            <div class="mini-field"><label>Steps</label><input type="number" id="callSteps${n}" step="1" min="0" placeholder="—" title="Sets the ± amount for Gap's keyboard Up/Down arrow keys"></div>
+            <div class="mini-field"><label>Gap</label><input type="number" id="callGap${n}" step="1"></div>
+            <div class="mini-field"><label>Ratio</label><input type="number" id="callRatio${n}" step="0.01" value="3"></div>
+          </div>
+        </div>
+        <div class="table-scroll">
+          <table class="spread-table" id="callSpreadTable${n}">
+            <colgroup>
+              <col class="sp-vol"><col class="sp-vol"><col class="sp-strike"><col class="sp-strike"><col class="sp-data"><col class="sp-data"><col class="sp-data"><col class="sp-trade"><col class="sp-alert">
+            </colgroup>
+            <thead><tr>
+              <th>VOL1</th>
+              <th>VOL2</th>
+              <th>STRIKE1</th>
+              <th>STRIKE2</th>
+              <th>LTP</th>
+              <th>BID</th>
+              <th>ASK</th>
+              <th class="sp-trade-col">TRADE</th>
+              <th class="sp-alert-col">🔔</th>
+            </tr></thead>
+            <tbody id="callSpreadBody${n}"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="spread-block put-block">
+        <div class="spread-title">
+          <span class="spread-title-label" style="color:var(--put)">PUT</span>
+          <span class="strike-count-badge" id="putStrikeCount${n}">0 strikes</span>
+          <div class="inline-controls">
+            <div class="mini-field"><label>Steps</label><input type="number" id="putSteps${n}" step="1" min="0" placeholder="—" title="Sets the ± amount for Gap's keyboard Up/Down arrow keys"></div>
+            <div class="mini-field"><label>Gap</label><input type="number" id="putGap${n}" step="1"></div>
+            <div class="mini-field"><label>Ratio</label><input type="number" id="putRatio${n}" step="0.01" value="3"></div>
+          </div>
+        </div>
+        <div class="table-scroll">
+          <table class="spread-table" id="putSpreadTable${n}">
+            <colgroup>
+              <col class="sp-vol"><col class="sp-vol"><col class="sp-strike"><col class="sp-strike"><col class="sp-data"><col class="sp-data"><col class="sp-data"><col class="sp-trade"><col class="sp-alert">
+            </colgroup>
+            <thead><tr>
+              <th>VOL1</th>
+              <th>VOL2</th>
+              <th>STRIKE1</th>
+              <th>STRIKE2</th>
+              <th>LTP</th>
+              <th>BID</th>
+              <th>ASK</th>
+              <th class="sp-trade-col">TRADE</th>
+              <th class="sp-alert-col">🔔</th>
+            </tr></thead>
+            <tbody id="putSpreadBody${n}"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>`;
+}
+document.getElementById('spreadBuildersRoot').innerHTML = BUILDER_IDS.map(buildSpreadBuilderHTML).join('');
+
+// per-builder state, keyed by builder id
+const spreadState = {};
+const spreadEls = {};
+const gapTouched = {};
+
+BUILDER_IDS.forEach(n=>{
+  spreadState[n] = {
+    mode: localStorage.getItem(`doc_spread_mode_${n}`) || 'ratio',
+    expiryTouched: false,
+    expiry2Touched: false,
+    initialExpiryApplied: false,
+    initialExpiry2Applied: false,
+  };
+  gapTouched[n] = { ratio: {call:false, put:false}, calendar: {call:false, put:false} };
+  spreadEls[n] = {
+    expiry: document.getElementById(`spreadExpiry_${n}`),
+    expiry2: document.getElementById(`spreadExpiry2_${n}`),
+    call: { gap: document.getElementById(`callGap${n}`), ratio: document.getElementById(`callRatio${n}`), count: document.getElementById(`callStrikeCount${n}`), steps: document.getElementById(`callSteps${n}`) },
+    put:  { gap: document.getElementById(`putGap${n}`),  ratio: document.getElementById(`putRatio${n}`),  count: document.getElementById(`putStrikeCount${n}`), steps: document.getElementById(`putSteps${n}`) }
+  };
+});
+
+// builder 1 only: one-time migration from the old single-instance keys so
+// existing users don't lose their saved Gap/Ratio/Steps/expiry values
+['call','put'].forEach(side=>{
+  const oldGap = localStorage.getItem('doc_'+side+'_gap');
+  const oldRatio = localStorage.getItem('doc_'+side+'_ratio');
+  const newGapKey = `doc_${side}_gapVal_ratio_${state.underlying}_1`;
+  const newRatioKey = `doc_${side}_ratioVal_ratio_${state.underlying}_1`;
+  if(oldGap !== null && localStorage.getItem(newGapKey) === null){
+    localStorage.setItem(newGapKey, oldGap);
+  }
+  if(oldRatio !== null && localStorage.getItem(newRatioKey) === null){
+    localStorage.setItem(newRatioKey, oldRatio);
+  }
+  ['ratio','calendar'].forEach(mode=>{
+    ['gapVal','ratioVal','stepsVal'].forEach(kind=>{
+      const legacyKey = `doc_${side}_${kind}_${mode}_${state.underlying}`;
+      const legacyVal = localStorage.getItem(legacyKey);
+      const newKey = `${legacyKey}_1`;
+      if(legacyVal !== null && localStorage.getItem(newKey) === null){
+        localStorage.setItem(newKey, legacyVal);
+      }
+    });
+  });
+});
+if(localStorage.getItem('doc_spread_expiry2') !== null && localStorage.getItem('doc_spread_expiry2_1') === null){
+  localStorage.setItem('doc_spread_expiry2_1', localStorage.getItem('doc_spread_expiry2'));
+}
+if(localStorage.getItem('doc_spread_trade_col') !== null && localStorage.getItem('doc_spread_trade_col_all') === null){
+  localStorage.setItem('doc_spread_trade_col_all', localStorage.getItem('doc_spread_trade_col'));
+}
+
+// restore last-used Gap/Ratio/Steps for a given builder+mode+underlying —
+// each underlying (BTC/ETH/...) remembers its own values separately per
+// builder and mode, so switching either one brings back exactly what was
+// last set for that combination
+function loadModeGapRatio(n, mode){
+  ['call','put'].forEach(side=>{
+    const savedGap = localStorage.getItem(`doc_${side}_gapVal_${mode}_${state.underlying}_${n}`);
+    const savedRatio = localStorage.getItem(`doc_${side}_ratioVal_${mode}_${state.underlying}_${n}`);
+    const savedSteps = localStorage.getItem(`doc_${side}_stepsVal_${mode}_${state.underlying}_${n}`);
+    if(savedGap !== null){
+      spreadEls[n][side].gap.value = savedGap;
+      gapTouched[n][mode][side] = true;
+    } else {
+      gapTouched[n][mode][side] = false; // no saved value for this underlying — fall back to auto-gap
+    }
+    if(savedRatio !== null){ spreadEls[n][side].ratio.value = savedRatio; }
+    spreadEls[n][side].steps.value = savedSteps !== null ? savedSteps : '';
+    const stepsNum = parseFloat(spreadEls[n][side].steps.value);
+    spreadEls[n][side].gap.step = (!isNaN(stepsNum) && stepsNum > 0) ? stepsNum : 1;
+  });
+}
+BUILDER_IDS.forEach(n=> loadModeGapRatio(n, spreadState[n].mode));
+
+const savedActiveExpiry = localStorage.getItem('doc_active_expiry');
+let initialExpiryApplied = false;
+
+let spreadRenderTimer = null;
+function scheduleRenderSpreads(){
+  clearTimeout(spreadRenderTimer);
+  spreadRenderTimer = setTimeout(renderSpreads, 300);
+}
+
+BUILDER_IDS.forEach(n=>{
+  ['call','put'].forEach(side=>{
+    const els = spreadEls[n][side];
+    els.ratio.addEventListener('input', ()=>{
+      localStorage.setItem(`doc_${side}_ratioVal_${spreadState[n].mode}_${state.underlying}_${n}`, els.ratio.value);
+      scheduleRenderSpreads();
+    });
+    els.gap.addEventListener('input', ()=>{
+      gapTouched[n][spreadState[n].mode][side] = true;
+      localStorage.setItem(`doc_${side}_gapVal_${spreadState[n].mode}_${state.underlying}_${n}`, els.gap.value);
+      scheduleRenderSpreads();
+    });
+    els.steps.addEventListener('input', ()=>{
+      // this box is just the ± increment size for the Gap field — pressing
+      // the keyboard Up/Down arrows while Gap is focused will now add/subtract
+      // exactly this amount (native <input type=number step=...> behavior)
+      const stepsVal = parseFloat(els.steps.value);
+      els.gap.step = (!isNaN(stepsVal) && stepsVal > 0) ? stepsVal : 1;
+      localStorage.setItem(`doc_${side}_stepsVal_${spreadState[n].mode}_${state.underlying}_${n}`, els.steps.value);
+    });
+  });
+
+  spreadEls[n].expiry.addEventListener('change', ()=>{
+    spreadState[n].expiryTouched = true;
+    localStorage.setItem(`doc_spread_expiry_${spreadState[n].mode}_${n}`, spreadEls[n].expiry.value);
+    applyAutoGap(n, 'call');
+    applyAutoGap(n, 'put');
+    renderSpreads();
+  });
+  spreadEls[n].expiry2.addEventListener('change', ()=>{
+    spreadState[n].expiry2Touched = true;
+    localStorage.setItem(`doc_spread_expiry2_${n}`, spreadEls[n].expiry2.value);
+    renderSpreads();
+  });
+
+  // ---- ratio vs calendar/diagonal toggle (per builder) ----
+  updateSpreadModeUI(n);
+  document.querySelectorAll(`#spreadModeToggle${n} button`).forEach(b=>{
+    b.addEventListener('click', ()=>{
+      if(b.dataset.mode === spreadState[n].mode) return;
+      spreadState[n].mode = b.dataset.mode;
+      localStorage.setItem(`doc_spread_mode_${n}`, spreadState[n].mode);
+
+      // bring back whatever expiry was last used in this mode, if it's still listed
+      const savedExpForMode = localStorage.getItem(`doc_spread_expiry_${spreadState[n].mode}_${n}`);
+      if(savedExpForMode && state.expiries.includes(savedExpForMode)){
+        spreadEls[n].expiry.value = savedExpForMode;
+        spreadState[n].expiryTouched = true;
+      }
+      // bring back this mode's own Gap/Ratio/Steps settings for both legs
+      loadModeGapRatio(n, spreadState[n].mode);
+
+      updateSpreadModeUI(n);
+      applyAutoGap(n, 'call');
+      applyAutoGap(n, 'put');
+      renderSpreads();
+    });
+  });
+});
+
+function updateSpreadModeUI(n){
+  document.querySelectorAll(`#spreadModeToggle${n} button`).forEach(b=>{
+    b.classList.toggle('active', b.dataset.mode === spreadState[n].mode);
+  });
+  const isCalendar = spreadState[n].mode === 'calendar';
+  document.getElementById(`expiryField2_${n}`).style.display = isCalendar ? 'flex' : 'none';
+  document.getElementById(`spreadExpiryLabel${n}`).textContent = isCalendar ? 'Near Expiry' : 'Expiry';
+  document.getElementById(`spreadBuilderTitle${n}`).textContent = isCalendar ? 'Calendar / Diagonal Spread Builder' : 'Ratio Spread Builder';
+  document.getElementById(`spreadBuilderHint${n}`).textContent = isCalendar
+    ? 'Spread = Far.LTP − Near.LTP×Ratio · Same strike, two expiries = Calendar · Different strikes = Diagonal · Gap = 0 for a pure calendar'
+    : 'Spread BID = Strike1.Ask − Strike2.Bid×Ratio · Spread ASK = Strike1.Bid − Strike2.Ask×Ratio';
+}
+
+// ---- show/hide the Buy/Sell trade column — applies to all 3 builders at once ----
+const tradeColToggle = document.getElementById('tradeColToggle');
+const viewSpreadEl = document.getElementById('viewSpread');
+const savedTradeCol = localStorage.getItem('doc_spread_trade_col_all');
+if(savedTradeCol === 'off'){
+  tradeColToggle.checked = false;
+  viewSpreadEl.classList.add('hide-trade-col');
+}
+tradeColToggle.addEventListener('change', ()=>{
+  viewSpreadEl.classList.toggle('hide-trade-col', !tradeColToggle.checked);
+  localStorage.setItem('doc_spread_trade_col_all', tradeColToggle.checked ? 'on' : 'off');
+});
+
+// ---- view toggle: swaps entire content area (fresh window feel), not stacked ----
+// Single source of truth for switching views — used by the nav bar AND by
+// any action (like adding a spread to the payoff draft) that should jump
+// the user straight to the relevant view.
+function goToView(view){
+  state.view = view;
+  localStorage.setItem('doc_view', state.view);
+  document.querySelectorAll('#viewToggle button').forEach(x=>x.classList.toggle('active', x.dataset.view===view));
+  document.getElementById('viewChain').style.display = state.view==='chain' ? 'block' : 'none';
+  document.getElementById('viewSpread').style.display = state.view==='spread' ? 'block' : 'none';
+  document.getElementById('viewPayoff').style.display = state.view==='payoff' ? 'block' : 'none';
+  document.getElementById('viewAnalytics').style.display = state.view==='analytics' ? 'block' : 'none';
+  if(state.view === 'spread') renderSpreads();
+  if(state.view === 'payoff') renderPayoff();
+  if(state.view === 'analytics') renderAnalytics();
+}
+
+document.querySelectorAll('#viewToggle button').forEach(b=>{
+  b.classList.toggle('active', b.dataset.view === state.view);
+  b.addEventListener('click', ()=> goToView(b.dataset.view));
+});
+document.getElementById('viewChain').style.display = state.view==='chain' ? 'block' : 'none';
+document.getElementById('viewSpread').style.display = state.view==='spread' ? 'block' : 'none';
+document.getElementById('viewPayoff').style.display = state.view==='payoff' ? 'block' : 'none';
+document.getElementById('viewAnalytics').style.display = state.view==='analytics' ? 'block' : 'none';
+
+// ---- density control ----
+document.querySelectorAll('#densitySeg button').forEach(b=>{
+  b.classList.toggle('active', b.dataset.d === state.density);
+  b.addEventListener('click', ()=>{
+    state.density = b.dataset.d;
+    localStorage.setItem('doc_density', state.density);
+    document.querySelectorAll('#densitySeg button').forEach(x=>x.classList.toggle('active', x===b));
+    applyDensity();
+  });
+});
+function applyDensity(){
+  const table = document.getElementById('chainTable');
+  if(state.density === 'compact'){
+    table.style.fontSize = '12.5px';
+    document.querySelectorAll('#chainTable td').forEach(td=>td.style.padding='5px 8px');
+  } else {
+    table.style.fontSize = '14.5px';
+    document.querySelectorAll('#chainTable td').forEach(td=>td.style.padding='9px 10px');
+  }
+}
+
+document.documentElement.setAttribute('data-theme', state.theme);
+document.body.setAttribute('data-theme', state.theme);
+document.querySelectorAll('#themeSeg button').forEach(b=>{
+  b.classList.toggle('active', b.dataset.t === state.theme);
+  b.addEventListener('click', ()=>{
+    state.theme = b.dataset.t;
+    localStorage.setItem('doc_theme', state.theme);
+    document.documentElement.setAttribute('data-theme', state.theme);
+    document.body.setAttribute('data-theme', state.theme);
+    document.querySelectorAll('#themeSeg button').forEach(x=>x.classList.toggle('active', x===b));
+  });
+});
+
+document.querySelectorAll('#underlyingSeg button').forEach(b=>{
+  b.classList.toggle('active', b.dataset.u === state.underlying);
+  b.addEventListener('click', ()=>{
+    state.underlying = b.dataset.u;
+    localStorage.setItem('doc_underlying', state.underlying);
+    document.querySelectorAll('#underlyingSeg button').forEach(x=>x.classList.toggle('active', x===b));
+    document.getElementById('spotLabel').textContent = state.underlying + ' Future';
+    BUILDER_IDS.forEach(n=> document.getElementById(`spreadSpotLabel${n}`).textContent = state.underlying + ' Future');
+    state.activeExpiry = null;
+    state.spot = null;
+    document.getElementById('spotValue').textContent = '—';
+    BUILDER_IDS.forEach(n=>{
+      document.getElementById(`spreadSpotValue${n}`).textContent = '—';
+      loadModeGapRatio(n, spreadState[n].mode);
+    });
+    fetchSnapshot();
+  });
+});
+document.getElementById('spotLabel').textContent = state.underlying + ' Future';
+BUILDER_IDS.forEach(n=> document.getElementById(`spreadSpotLabel${n}`).textContent = state.underlying + ' Future');
+
+document.getElementById('refreshBtn').addEventListener('click', fetchSnapshot);
+document.getElementById('logoutBtn').addEventListener('click', ()=>{
+  if(confirm('Logout ho jaayein?')) window.__oddLogout();
+});
+document.getElementById('pauseBtn').addEventListener('click', (e)=>{
+  state.paused = !state.paused;
+  e.target.textContent = state.paused ? '▶' : '⏸';
+  e.target.title = state.paused ? 'Resume live feed' : 'Pause live feed';
+  if(state.paused){
+    clearTimeout(wsReconnectTimer);
+    clearTimeout(wsOpenTimer);
+    clearTimeout(wsMsgTimer);
+    clearInterval(fallbackTimer);
+    fallbackActive = false;
+    if(ws){ ws.onclose = null; ws.onerror = null; ws.close(); ws = null; }
+    setStatus(false, 'Paused');
+  } else {
+    fetchSnapshot();
+  }
+});
+
+const rateInput = document.getElementById('rateInput');
+const savedRate = localStorage.getItem('doc_rate');
+if(savedRate) rateInput.value = savedRate;
+state.resyncMs = parseInt(rateInput.value, 10);
+rateInput.addEventListener('change', ()=>{
+  state.resyncMs = parseInt(rateInput.value, 10);
+  localStorage.setItem('doc_rate', rateInput.value);
+  if(state.timer) clearInterval(state.timer);
+  state.timer = setInterval(tick, state.resyncMs);
+});
+
+function setStatus(ok, text){
+  document.getElementById('statusDot').classList.toggle('err', !ok);
+  document.getElementById('statusText').textContent = text;
+  BUILDER_IDS.forEach(n=>{
+    const sd = document.getElementById(`spreadStatusDot${n}`);
+    if(sd) sd.classList.toggle('err', !ok);
+  });
+}
+
+function fmt(n, d=2){
+  if(n === null || n === undefined || isNaN(n)) return '—';
+  return Number(n).toLocaleString(undefined, {maximumFractionDigits:d, minimumFractionDigits:0, useGrouping:false});
+}
+
+// lot size conversion: e.g. BTC options trade 1000 lots = 1 BTC (lot = 0.001 BTC),
+// ETH options trade 100 lots = 1 ETH (lot = 0.01 ETH). avgPremium/intrinsic values
+// are quoted per 1 whole unit of the underlying, so a position of N lots is only
+// N*lotUnitSize(underlying) units of underlying — P&L must be scaled by that factor.
+// The exact lot size (Delta's "contract_value") differs per underlying and can
+// change, so it's fetched from Delta's own products API rather than guessed —
+// this is what makes adding a new underlying (e.g. XAUT) safe without hardcoding.
+const lotSizeCache = { BTC: 0.001, ETH: 0.01 }; // known-good starting defaults; overwritten by the real API value once fetched
+const lotSizeFetchInFlight = {};
+
+async function ensureLotSize(underlying){
+  if(lotSizeCache[underlying] != null || lotSizeFetchInFlight[underlying]) return;
+  lotSizeFetchInFlight[underlying] = true;
+  try{
+    const res = await fetch(`https://api.india.delta.exchange/v2/products?contract_types=call_options&underlying_asset_symbols=${underlying}`);
+    if(!res.ok) throw new Error('HTTP ' + res.status);
+    const json = await res.json();
+    const product = (json.result || [])[0];
+    if(product && product.contract_value){
+      lotSizeCache[underlying] = parseFloat(product.contract_value);
+    } else {
+      throw new Error('no product / contract_value for ' + underlying);
+    }
+  }catch(e){
+    console.warn('[lotSize] could not fetch real contract_value for', underlying, '— falling back to 0.01', e);
+    lotSizeCache[underlying] = 0.01;
+  }
+  // the P&L numbers on screen may have rendered with a wrong assumed lot size
+  // while this fetch was in flight — refresh them now that we know the truth
+  if(state.view === 'payoff') renderPayoff();
+  if(state.view === 'analytics') renderAnalytics();
+}
+
+function lotUnitSize(underlying){
+  if(lotSizeCache[underlying] == null){
+    ensureLotSize(underlying); // kick off the real fetch; use a safe interim guess this render
+    return 0.01;
+  }
+  return lotSizeCache[underlying];
+}
+function legLotUnitSize(leg){
+  return lotUnitSize(leg.underlying || state.underlying);
+}
+
+// strike prices are shown WITHOUT thousand separators (e.g. 61000, not 61,000)
+function fmtStrike(n){
+  if(n === null || n === undefined || isNaN(n)) return '—';
+  return Math.round(n).toString();
+}
+
+// ============ REST snapshot: discovers symbols + seeds initial values ============
+// Run once per underlying switch, on manual refresh, and periodically (resync
+// interval) to pick up newly listed strikes/expiries. Live price ticks after
+// that come from the WebSocket, not from repeated REST polling.
+let symbolIndex = new Map();
+let futuresSymbol = null; // e.g. "BTCUSD" — the actual perpetual futures product,
+                           // NOT the "spot_price" field embedded in option tickers
+                           // (that field is an index/settlement price and can
+                           // legitimately differ from Delta's own futures price).
+
+async function fetchFuturesPrice(){
+  futuresSymbol = state.underlying + 'USD';
+  try{
+    const res = await fetch(`https://api.india.delta.exchange/v2/tickers/${futuresSymbol}`);
+    if(!res.ok) return;
+    const json = await res.json();
+    const r = json.result;
+    if(!r) return;
+    const price = r.mark_price ?? r.close ?? r.last_price;
+    if(price != null) updateSpotDisplay(parseFloat(price));
+  }catch(e){
+    console.warn('[futures] could not seed futures price for', futuresSymbol, e);
+  }
+}
+
+async function fetchSnapshot(){
+  try{
+    const url = `https://api.india.delta.exchange/v2/tickers?contract_types=call_options,put_options&underlying_asset_symbols=${state.underlying}`;
+    const res = await fetch(url);
+    if(!res.ok) throw new Error('HTTP ' + res.status);
+    const json = await res.json();
+    const result = json.result || [];
+    const rows = result.filter(r => r.underlying_asset_symbol === state.underlying);
+    if(rows.length === 0){
+      setStatus(false, 'No data');
+      renderEmpty('No contracts found for ' + state.underlying);
+      return;
+    }
+    symbolIndex = new Map();
+    state.raw = rows.map((r, i) => {
+      const q = r.quotes || {};
+      const g = r.greeks || {};
+      const ltpRaw = r.close ?? r.last_price ?? r.mark_price ?? null;
+      symbolIndex.set(r.symbol, i);
+      return {
+        symbol: r.symbol,
+        contract_type: r.contract_type,
+        // strikes are always whole numbers on Delta Exchange; snapping here kills
+        // tiny float/precision noise from the feed that was creating phantom
+        // near-duplicate strikes (e.g. 1700.0 and 1704.98 both displaying as
+        // "1700" but living at two different object keys) which then threw off
+        // the gap=0 nearest-match logic in the ratio/calendar builder
+        strike: Math.round(parseFloat(r.strike_price)),
+        expiry: extractExpiry(r.symbol),
+        bid: q.best_bid ? parseFloat(q.best_bid) : null,
+        ask: q.best_ask ? parseFloat(q.best_ask) : null,
+        ltp: ltpRaw !== null ? parseFloat(ltpRaw) : null,
+        mark: r.mark_price ? parseFloat(r.mark_price) : null,
+        delta: g.delta ? parseFloat(g.delta) : null,
+        theta: g.theta ? parseFloat(g.theta) : null,
+        iv: q.mark_iv ? parseFloat(q.mark_iv) : null,
+        volume: r.volume ? parseFloat(r.volume) : 0,
+        oi: r.oi != null ? parseFloat(r.oi) : (r.open_interest != null ? parseFloat(r.open_interest) : null),
+        oiContracts: r.oi_contracts != null ? parseFloat(r.oi_contracts) : null,
+        oiChange: r.oi_change_usd_6h != null ? parseFloat(r.oi_change_usd_6h) : null,
+      };
+    });
+
+    buildExpiries();
+    renderTable();
+    applyDensity();
+    if(state.view === 'spread') renderSpreads();
+    if(state.view === 'payoff') renderPayoff();
+    if(state.view === 'analytics') renderAnalytics();
+    document.getElementById('lastUpdate').textContent = 'snapshot ' + new Date().toLocaleTimeString();
+
+    // seed the real futures price (overrides any stale value), then stream
+    // live updates for both the option symbols AND the futures symbol itself
+    await fetchFuturesPrice();
+    connectWebSocket([...state.raw.map(r => r.symbol), futuresSymbol]);
+  }catch(err){
+    setStatus(false, 'Blocked');
+    renderEmpty(null, err);
+  }
+}
+
+function updateSpotDisplay(newSpot){
+  if(newSpot === undefined || newSpot === null) return;
+  const spotEl = document.getElementById('spotValue');
+  if(state.spot !== null && newSpot !== state.spot){
+    spotEl.classList.remove('flash-up','flash-down');
+    spotEl.classList.add(newSpot > state.spot ? 'flash-up' : 'flash-down');
+    setTimeout(()=>spotEl.classList.remove('flash-up','flash-down'), 600);
+  }
+  state.spot = newSpot;
+  spotEl.textContent = '$' + fmt(state.spot, 2);
+  BUILDER_IDS.forEach(n=>{
+    const spreadSpotEl = document.getElementById(`spreadSpotValue${n}`);
+    if(spreadSpotEl) spreadSpotEl.textContent = '$' + fmt(state.spot, 2);
+  });
+  if(state.view === 'payoff' && state.payoffSpotOverride === null && typeof drawPayoffChart === 'function'){
+    drawPayoffChart();
+    updatePayoffStats();
+  }
+}
+
+// ============ WebSocket: live tick-by-tick price feed ============
+let ws = null;
+let wsReconnectAttempts = 0;
+let wsReconnectTimer = null;
+let wsOpenTimer = null;
+let wsMsgTimer = null;
+let wsMsgReceived = false;
+let lastWsAttempt = 0;
+let renderPending = false;
+
+let fallbackActive = false;
+let fallbackTimer = null;
+function startFallback(reason){
+  if(fallbackActive) return;
+  fallbackActive = true;
+  console.warn('[WS] switching to REST fallback —', reason,
+    '(the exchange may be rejecting browser WebSocket connections by Origin, even though REST works)');
+  setStatus(false, 'REST fallback (WS blocked)');
+  clearInterval(fallbackTimer);
+  fallbackTimer = setInterval(()=>{ if(!state.paused) fetchSnapshot(); }, 2000);
+}
+function stopFallback(){
+  if(!fallbackActive) return;
+  fallbackActive = false;
+  clearInterval(fallbackTimer);
+  fallbackTimer = null;
+  console.info('[WS] live ticks confirmed — REST fallback disabled');
+}
+
+function connectWebSocket(symbols){
+  if(state.paused) return;
+  if(fallbackActive && Date.now() - lastWsAttempt < 10000) return; // don't hammer while already falling back
+  lastWsAttempt = Date.now();
+  if(ws){ ws.onclose = null; ws.onerror = null; try{ ws.close(); }catch(e){} }
+  clearTimeout(wsOpenTimer);
+  clearTimeout(wsMsgTimer);
+  wsMsgReceived = false;
+  if(!fallbackActive) setStatus(false, 'Connecting…');
+
+  try{
+    ws = new WebSocket('wss://socket.india.delta.exchange');
+  }catch(e){
+    console.warn('[WS] could not construct WebSocket:', e);
+    startFallback('WebSocket() threw on construction');
+    scheduleWsRetry(symbols);
+    return;
+  }
+
+  wsOpenTimer = setTimeout(()=>{
+    if(ws && ws.readyState !== WebSocket.OPEN){
+      console.warn('[WS] handshake did not complete within 6s (readyState=' + ws.readyState + ')');
+      startFallback('handshake timeout');
+      try{ ws.close(); }catch(e){}
+    }
+  }, 6000);
+
+  ws.onopen = () => {
+    clearTimeout(wsOpenTimer);
+    wsReconnectAttempts = 0;
+    ws.send(JSON.stringify({
+      type: 'subscribe',
+      payload: { channels: [ { name: 'v2/ticker', symbols } ] }
+    }));
+    console.info('[WS] connected, subscribed to', symbols.length, 'symbols');
+    wsMsgTimer = setTimeout(()=>{
+      if(!wsMsgReceived){
+        console.warn('[WS] socket opened but no ticks arrived within 8s — subscription may be rejected server-side');
+        startFallback('no ticks after subscribe');
+      }
+    }, 8000);
+    if(!fallbackActive) setStatus(true, 'Live');
+  };
+
+  ws.onmessage = (evt) => {
+    let msg;
+    try{ msg = JSON.parse(evt.data); }catch(e){ return; }
+    if(msg.type === 'v2/ticker' || msg.type === 'ticker'){
+      if(!wsMsgReceived){
+        wsMsgReceived = true;
+        clearTimeout(wsMsgTimer);
+        if(fallbackActive) stopFallback();
+        setStatus(true, 'Live');
+      }
+      applyTickUpdate(msg);
+    } else if(msg.type === 'error'){
+      console.warn('[WS] server sent error message:', msg);
+    }
+  };
+
+  ws.onerror = (e) => {
+    console.warn('[WS] error event fired', e);
+  };
+
+  ws.onclose = (e) => {
+    clearTimeout(wsOpenTimer);
+    clearTimeout(wsMsgTimer);
+    console.warn('[WS] closed — code:', e.code, 'reason:', e.reason || '(none given)', 'clean:', e.wasClean);
+    if(state.paused) return;
+    if(!wsMsgReceived) startFallback('connection closed before any tick (code ' + e.code + ')');
+    else if(!fallbackActive) setStatus(false, 'Reconnecting…');
+    scheduleWsRetry(symbols);
+  };
+}
+
+function scheduleWsRetry(symbols){
+  wsReconnectAttempts++;
+  const delay = Math.min(30000, 1000 * Math.pow(2, wsReconnectAttempts));
+  clearTimeout(wsReconnectTimer);
+  wsReconnectTimer = setTimeout(()=>connectWebSocket(symbols), delay);
+}
+
+function applyTickUpdate(r){
+  // this tick is the actual perpetual futures product (e.g. BTCUSD) —
+  // use it directly for the displayed futures price, don't touch option rows
+  if(r.symbol === futuresSymbol){
+    const price = r.close ?? r.mark_price ?? r.last_price;
+    if(price != null) updateSpotDisplay(parseFloat(price));
+    return;
+  }
+  const idx = symbolIndex.get(r.symbol);
+  if(idx === undefined || !state.raw[idx]) return;
+  const entry = state.raw[idx];
+  const q = r.quotes || {};
+  const g = r.greeks || {};
+  const ltpRaw = r.close ?? r.last_price ?? r.mark_price ?? null;
+  if(q.best_bid) entry.bid = parseFloat(q.best_bid);
+  if(q.best_ask) entry.ask = parseFloat(q.best_ask);
+  if(ltpRaw !== null && ltpRaw !== undefined) entry.ltp = parseFloat(ltpRaw);
+  if(r.mark_price != null) entry.mark = parseFloat(r.mark_price);
+  if(g.delta != null) entry.delta = parseFloat(g.delta);
+  if(g.theta != null) entry.theta = parseFloat(g.theta);
+  if(q.mark_iv != null) entry.iv = parseFloat(q.mark_iv);
+  if(r.volume != null) entry.volume = parseFloat(r.volume);
+  if(r.oi != null) entry.oi = parseFloat(r.oi);
+  else if(r.open_interest != null) entry.oi = parseFloat(r.open_interest);
+  // NOTE: intentionally NOT using r.spot_price here — that's the options'
+  // settlement/index price, not Delta's futures price, and was the source
+  // of the mismatch. The futures price only comes from the branch above.
+
+  if(!renderPending){
+    renderPending = true;
+    requestAnimationFrame(()=>{
+      renderPending = false;
+      renderTable();
+      if(state.view === 'spread') renderSpreads();
+      if(state.view === 'payoff') { drawPayoffChart(); updatePayoffStats(); renderPortfolio(); }
+      if(state.view === 'analytics') renderAnalytics();
+      document.getElementById('lastUpdate').textContent = 'tick ' + new Date().toLocaleTimeString();
+    });
+  }
+}
+
+function extractExpiry(symbol){
+  const parts = symbol.split('-');
+  const d = parts[parts.length-1];
+  if(!/^\d{6}$/.test(d)) return null;
+  const dd = d.slice(0,2), mm = d.slice(2,4), yy = '20'+d.slice(4,6);
+  return `${yy}-${mm}-${dd}`;
+}
+
+// Single source of truth for switching the active expiry — used by the
+// chain's expiry pills AND the Analytics view's expiry dropdown, so both
+// stay in sync no matter which one the user changes.
+function setActiveExpiry(exp){
+  if(!exp) return;
+  state.activeExpiry = exp;
+  localStorage.setItem('doc_active_expiry', exp);
+  renderTable();
+  document.querySelectorAll('.expiry-pill').forEach(p=>p.classList.toggle('active', p.textContent.trim().startsWith(exp)));
+  const analyticsSel = document.getElementById('analyticsExpirySelect');
+  if(analyticsSel && analyticsSel.value !== exp) analyticsSel.value = exp;
+  BUILDER_IDS.forEach(n=>{
+    if(!spreadState[n].expiryTouched){
+      spreadEls[n].expiry.value = state.activeExpiry;
+      applyAutoGap(n, 'call'); applyAutoGap(n, 'put');
+    }
+  });
+  if(state.view==='spread') renderSpreads();
+  if(state.view==='analytics') renderAnalytics();
+}
+
+function populateBuilderExpiries(n, set){
+  const bs = spreadState[n];
+  const savedSpreadExpiry = localStorage.getItem(`doc_spread_expiry_${bs.mode}_${n}`);
+  const savedSpreadExpiry2 = localStorage.getItem(`doc_spread_expiry2_${n}`);
+
+  const prevSpreadExpiry = spreadEls[n].expiry.value;
+  spreadEls[n].expiry.innerHTML = set.map(exp=>`<option value="${exp}">${exp}</option>`).join('');
+  // NOTE: rebuilding innerHTML above resets the <select>'s value to its first
+  // option, so from here on we must decide the target using prevSpreadExpiry
+  // (captured before the rebuild) — never re-read spreadEls[n].expiry.value first.
+  let targetSpreadExpiry = null;
+  if(!bs.initialExpiryApplied){
+    bs.initialExpiryApplied = true;
+    if(savedSpreadExpiry && set.includes(savedSpreadExpiry)){
+      targetSpreadExpiry = savedSpreadExpiry;
+      bs.expiryTouched = true;
+    }
+  }
+  if(targetSpreadExpiry === null){
+    if(bs.expiryTouched && set.includes(prevSpreadExpiry)){
+      targetSpreadExpiry = prevSpreadExpiry;
+    } else if(state.activeExpiry && set.includes(state.activeExpiry)){
+      targetSpreadExpiry = state.activeExpiry;
+    }
+  }
+  if(targetSpreadExpiry !== null){
+    spreadEls[n].expiry.value = targetSpreadExpiry;
+  }
+
+  const prevSpreadExpiry2 = spreadEls[n].expiry2.value;
+  spreadEls[n].expiry2.innerHTML = set.map(exp=>`<option value="${exp}">${exp}</option>`).join('');
+  let targetSpreadExpiry2 = null;
+  if(!bs.initialExpiry2Applied){
+    bs.initialExpiry2Applied = true;
+    if(savedSpreadExpiry2 && set.includes(savedSpreadExpiry2)){
+      targetSpreadExpiry2 = savedSpreadExpiry2;
+      bs.expiry2Touched = true;
+    }
+  }
+  if(targetSpreadExpiry2 === null){
+    if(bs.expiry2Touched && set.includes(prevSpreadExpiry2)){
+      targetSpreadExpiry2 = prevSpreadExpiry2;
+    } else {
+      // sensible default "far" leg: the next listed expiry after the near one
+      const idx = set.indexOf(spreadEls[n].expiry.value);
+      targetSpreadExpiry2 = (idx >= 0 && idx < set.length-1) ? set[idx+1] : (set[0] || null);
+    }
+  }
+  if(targetSpreadExpiry2 !== null){
+    spreadEls[n].expiry2.value = targetSpreadExpiry2;
+  }
+
+  applyAutoGap(n, 'call');
+  applyAutoGap(n, 'put');
+}
+
+function buildExpiries(){
+  const set = [...new Set(state.raw.map(r=>r.expiry).filter(Boolean))].sort();
+  state.expiries = set;
+  if(!initialExpiryApplied){
+    initialExpiryApplied = true;
+    if(savedActiveExpiry && set.includes(savedActiveExpiry)) state.activeExpiry = savedActiveExpiry;
+  }
+  if(!state.activeExpiry || !set.includes(state.activeExpiry)){
+    state.activeExpiry = set[0] || null;
+  }
+  const row = document.getElementById('expiryRow');
+  row.innerHTML = '';
+  const today = new Date();
+  set.forEach(exp=>{
+    const pill = document.createElement('button');
+    pill.className = 'expiry-pill' + (exp === state.activeExpiry ? ' active' : '');
+    const dte = Math.max(0, Math.round((new Date(exp) - today) / 86400000));
+    pill.innerHTML = `${exp} <span class="dte">${dte}d</span>`;
+    pill.addEventListener('click', ()=>{ setActiveExpiry(exp); });
+    row.appendChild(pill);
+  });
+
+  const analyticsSel = document.getElementById('analyticsExpirySelect');
+  analyticsSel.innerHTML = set.map(exp=>`<option value="${exp}">${exp}</option>`).join('');
+  if(state.activeExpiry) analyticsSel.value = state.activeExpiry;
+
+  BUILDER_IDS.forEach(n=> populateBuilderExpiries(n, set));
+}
+
+function renderTable(){
+  const tbody = document.getElementById('chainBody');
+  const rowsForExpiry = state.raw.filter(r => r.expiry === state.activeExpiry);
+  const strikes = [...new Set(rowsForExpiry.map(r=>r.strike))].sort((a,b)=>a-b);
+  document.getElementById('rowCount').textContent = strikes.length + ' strikes';
+
+  if(strikes.length === 0){
+    renderEmpty('No strikes for this expiry');
+    return;
+  }
+
+  let atmStrike = null;
+  if(state.spot){
+    atmStrike = strikes.reduce((a,b)=> Math.abs(b-state.spot) < Math.abs(a-state.spot) ? b : a);
+  }
+
+  let callVolTotal = 0, putVolTotal = 0;
+
+  tbody.innerHTML = strikes.map(strike=>{
+    const call = rowsForExpiry.find(r=>r.strike===strike && r.contract_type==='call_options');
+    const put = rowsForExpiry.find(r=>r.strike===strike && r.contract_type==='put_options');
+    if(call) callVolTotal += call.volume || 0;
+    if(put) putVolTotal += put.volume || 0;
+    const isAtm = strike === atmStrike;
+    const callLtp = call ? fmt(call.ltp,2) : '—';
+    const putLtp = put ? fmt(put.ltp,2) : '—';
+    const callPos = call ? positionAt(strike,'call',state.activeExpiry) : null;
+    const putPos = put ? positionAt(strike,'put',state.activeExpiry) : null;
+    const posBadge = pos => pos ? `<span class="pos-badge ${pos.qty>=0?'buy':'sell'}">${pos.qty>=0?'B':'S'} ${Math.abs(pos.qty)}</span>` : '';
+    const bsBtns = (type,strike) => call||put ? `<span class="bs-btns"><button class="bs-btn buy" data-strike="${strike}" data-type="${type}" data-side="buy" title="Buy 1 lot">B</button><button class="bs-btn sell" data-strike="${strike}" data-type="${type}" data-side="sell" title="Sell 1 lot">S</button></span>` : '';
+    return `<tr class="${isAtm?'atm':''}">
+      <td class="call-side">${call?fmt(call.volume,2):'—'}</td>
+      <td class="call-side muted-cell">${call&&call.iv!=null?fmt(call.iv*100,0):'—'}</td>
+      <td class="call-side muted-cell">${call?fmt(call.delta,2):'—'}</td>
+      <td class="call-side muted-cell">${call&&call.theta!=null?fmt(call.theta,2):'—'}</td>
+      <td class="call-side ltp">${call?`<span class="ltp-cell call-ltp"><span class="ltp-price">${callLtp}</span><span class="ltp-extras">${posBadge(callPos)}${bsBtns('call',strike)}</span></span>`:'—'}</td>
+      <td class="call-side bid">${call?fmt(call.bid,2):'—'}</td>
+      <td class="call-side ask">${call?fmt(call.ask,2):'—'}</td>
+      <td class="strike">${fmtStrike(strike)}</td>
+      <td class="put-side bid">${put?fmt(put.bid,2):'—'}</td>
+      <td class="put-side ask">${put?fmt(put.ask,2):'—'}</td>
+      <td class="put-side ltp">${put?`<span class="ltp-cell put-ltp"><span class="ltp-extras">${bsBtns('put',strike)}${posBadge(putPos)}</span><span class="ltp-price">${putLtp}</span></span>`:'—'}</td>
+      <td class="put-side muted-cell">${put&&put.theta!=null?fmt(put.theta,2):'—'}</td>
+      <td class="put-side muted-cell">${put?fmt(put.delta,2):'—'}</td>
+      <td class="put-side muted-cell">${put&&put.iv!=null?fmt(put.iv*100,0):'—'}</td>
+      <td class="put-side">${put?fmt(put.volume,2):'—'}</td>
+    </tr>`;
+  }).join('');
+
+  tbody.querySelectorAll('.bs-btn').forEach(btn=>{
+    btn.addEventListener('click', (e)=>{
+      e.stopPropagation();
+      const strike = parseFloat(btn.dataset.strike);
+      const type = btn.dataset.type;
+      const side = btn.dataset.side;
+      const row = state.raw.find(r=>r.strike===strike && r.expiry===state.activeExpiry && r.contract_type===(type==='call'?'call_options':'put_options'));
+      if(!row) return;
+      // market orders: buying fills at the ask, selling fills at the bid
+      const fallback = row.ltp ?? row.mark ?? ((row.bid!=null&&row.ask!=null)?(row.bid+row.ask)/2:0) ?? 0;
+      const premium = side==='buy' ? (row.ask ?? fallback) : (row.bid ?? fallback);
+      tradePayoffLeg(type, strike, state.activeExpiry, premium||0, side==='sell' ? -1 : 1, {draft:true});
+      btn.closest('td').style.transition='none'; btn.closest('td').style.background='var(--strike-hl)';
+      requestAnimationFrame(()=>{ btn.closest('td').style.transition='background .6s'; btn.closest('td').style.background=''; });
+    });
+  });
+
+  document.getElementById('sumCallVol').textContent = fmt(callVolTotal,2);
+  document.getElementById('sumPutVol').textContent = fmt(putVolTotal,2);
+  document.getElementById('sumPcr').textContent = callVolTotal>0 ? fmt(putVolTotal/callVolTotal,2) : '—';
+  document.getElementById('sumAtm').textContent = atmStrike ? fmtStrike(atmStrike) : '—';
+  document.getElementById('sumExpiry').textContent = state.activeExpiry || '—';
+
+  const skewTotal = callVolTotal + putVolTotal;
+  const callPct = skewTotal > 0 ? (callVolTotal/skewTotal*100) : 50;
+  document.getElementById('skewCall').style.width = callPct + '%';
+  document.getElementById('skewPut').style.width = (100-callPct) + '%';
+}
+
+// ---- auto strike helpers (used only to seed a sensible default Gap) ----
+function detectModeStep(sortedStrikes){
+  if(sortedStrikes.length < 2) return 100;
+  const counts = new Map();
+  for(let i=1;i<sortedStrikes.length;i++){
+    const diff = Math.round((sortedStrikes[i]-sortedStrikes[i-1])*100)/100;
+    counts.set(diff, (counts.get(diff)||0)+1);
+  }
+  let bestDiff = null, bestCount = -1;
+  counts.forEach((c,d)=>{ if(c>bestCount){bestCount=c;bestDiff=d;} });
+  return bestDiff || 100;
+}
+
+function getSideStrikes(side, expiry){
+  const type = side==='call' ? 'call_options' : 'put_options';
+  const strikes = [...new Set(state.raw.filter(r=>r.expiry===expiry && r.contract_type===type).map(r=>r.strike))];
+  return strikes.sort((a,b)=>a-b);
+}
+
+function applyAutoGap(n, side){
+  const expiry = spreadEls[n].expiry.value || state.activeExpiry;
+  if(!expiry) return;
+  const strikes = getSideStrikes(side, expiry);
+  const els = spreadEls[n][side];
+  els.count.textContent = strikes.length + ' strikes';
+  if(!gapTouched[n][spreadState[n].mode][side]){
+    const step = detectModeStep(strikes);
+    els.gap.value = Math.round(step * 15);
+  }
+}
+
+function nearestInArray(arr, target){
+  let best=null, bd=Infinity;
+  for(const v of arr){
+    const d = Math.abs(v-target);
+    if(d<bd){bd=d; best=v;}
+  }
+  return best;
+}
+
+function renderSideSpread(n, side, sign){
+  const mode = spreadState[n].mode;
+  const expiry1 = spreadEls[n].expiry.value || state.activeExpiry;
+  const expiry2 = mode === 'calendar' ? (spreadEls[n].expiry2.value || expiry1) : expiry1;
+  const els = spreadEls[n][side];
+  const body = document.getElementById(side+'SpreadBody'+n);
+  const COLS = 9;
+
+  if(!expiry1 || (mode==='calendar' && !expiry2)){
+    body.innerHTML = `<tr><td colspan="${COLS}"><div class="spread-warning">Select ${mode==='calendar'?'both expiries':'an expiry'} to generate the ladder</div></td></tr>`;
+    return;
+  }
+  if(mode==='calendar' && expiry1===expiry2){
+    body.innerHTML = `<tr><td colspan="${COLS}"><div class="spread-warning">Pick two different expiries for a calendar/diagonal spread</div></td></tr>`;
+    return;
+  }
+
+  const type = side==='call' ? 'call_options' : 'put_options';
+  const rows1 = state.raw.filter(r => r.expiry === expiry1 && r.contract_type === type);
+  const rows2 = mode === 'calendar' ? state.raw.filter(r => r.expiry === expiry2 && r.contract_type === type) : rows1;
+  // if two rows collide on the same (now-rounded) strike, keep whichever
+  // actually has live bid/ask data instead of just letting the later one
+  // silently overwrite a good quote with a stale/empty one
+  const preferRow = (existing, incoming) => {
+    if(!existing) return incoming;
+    const existingLive = existing.bid!=null || existing.ask!=null;
+    const incomingLive = incoming.bid!=null || incoming.ask!=null;
+    if(incomingLive && !existingLive) return incoming;
+    if(existingLive && !incomingLive) return existing;
+    return incoming; // both live or both empty: last one wins, as before
+  };
+  const map1 = {}; rows1.forEach(r=>{ map1[r.strike] = preferRow(map1[r.strike], r); });
+  const map2 = {}; rows2.forEach(r=>{ map2[r.strike] = preferRow(map2[r.strike], r); });
+  let strikes1 = Object.keys(map1).map(Number).sort((a,b)=>a-b);
+  let strikes2 = Object.keys(map2).map(Number).sort((a,b)=>a-b);
+
+  if(strikes1.length === 0){
+    body.innerHTML = `<tr><td colspan="${COLS}"><div class="spread-warning">No live ${side} strikes for ${mode==='calendar'?'the near expiry':'this expiry'} yet</div></td></tr>`;
+    return;
+  }
+  if(mode==='calendar' && strikes2.length === 0){
+    body.innerHTML = `<tr><td colspan="${COLS}"><div class="spread-warning">No live ${side} strikes for the far expiry yet</div></td></tr>`;
+    return;
+  }
+  if(strikes1.length > 300){
+    body.innerHTML = `<tr><td colspan="${COLS}"><div class="spread-warning">${strikes1.length} strikes available — showing full ladder may be slow. Pick a nearer expiry for a shorter chain.</div></td></tr>`;
+  }
+
+  const gap = parseFloat(els.gap.value) || 0;
+  const ratioRaw = parseFloat(els.ratio.value);
+  const ratio = isNaN(ratioRaw) ? 1 : ratioRaw; // NaN (empty/invalid input) falls back to 1 — but a real 0 must stay 0
+
+  let atmStrike = null;
+  if(state.spot) atmStrike = nearestInArray(strikes1, state.spot);
+
+  // STRICT EXACT-MATCH RULE (per Abhi's spec): strikes1 (far expiry in calendar
+  // mode, or the base strike in ratio mode) is the reference. For each s1 we
+  // require the target strike to be LITERALLY LISTED in strikes2 (near expiry /
+  // shifted strike) — never substitute the nearest available strike just
+  // because it's "close enough". If the exact strike isn't there, show #N/A.
+  // This replaces the old tolerance/nearest-neighbor approach, which used to
+  // silently snap to a strike a full step away (e.g. target 1700 -> 1710) and
+  // produce misleading spread rows.
+  const EPS = 1e-6;
+  const strikeSet2 = new Set(strikes2);
+
+  const cell = v => v===null || v===undefined || isNaN(v) ? '<span class="na">#N/A</span>' : fmt(v,2);
+  const volCell = leg => leg && leg.volume != null ? fmt(leg.volume,2) : '<span class="na">—</span>';
+
+  let rows = '';
+  const rowValues = {};
+  strikes1.forEach(s1=>{
+    const target = s1 + sign*gap;
+    const rounded = Math.round(target);
+    // exact match only — no nearest-neighbor fallback, no tolerance window
+    let s2 = (Math.abs(target - rounded) < EPS && strikeSet2.has(rounded)) ? rounded : null;
+    const leg1 = map1[s1], leg2 = s2!==null ? map2[s2] : null;
+    // ratio mode:            Spread = Strike1(base) - Strike2(shifted)*Ratio
+    // calendar/diagonal mode: Spread = Far - Near*Ratio  (leg1=near, leg2=far)
+    // When Ratio is exactly 0 the "shifted"/"near" leg contributes nothing at
+    // all — per Abhi's spec, that leg (and its strike) should not appear in
+    // this row at all; the row is just the single remaining leg's own price.
+    const ratioZero = ratio === 0;
+    let ltp, bidV, askV;
+    if(ratioZero){
+      const soloLeg = mode === 'calendar' ? leg2 : leg1; // calendar: far leg is what remains; ratio: base leg is what remains
+      ltp  = soloLeg ? soloLeg.ltp : null;
+      bidV = soloLeg ? soloLeg.bid : null;
+      askV = soloLeg ? soloLeg.ask : null;
+    } else if(mode === 'calendar'){
+      ltp  = (leg2 && leg2.ltp!=null && leg1.ltp!=null) ? leg2.ltp - leg1.ltp*ratio : null;
+      bidV = (leg2 && leg2.ask!=null && leg1.bid!=null) ? leg2.ask - leg1.bid*ratio : null;
+      askV = (leg2 && leg2.bid!=null && leg1.ask!=null) ? leg2.bid - leg1.ask*ratio : null;
+    } else {
+      ltp  = (leg1.ltp!=null && leg2 && leg2.ltp!=null) ? leg1.ltp - leg2.ltp*ratio : null;
+      bidV = (leg1.ask!=null && leg2 && leg2.bid!=null) ? leg1.ask - leg2.bid*ratio : null;
+      askV = (leg1.bid!=null && leg2 && leg2.ask!=null) ? leg1.bid - leg2.ask*ratio : null;
+    }
+    const isAtm = s1 === atmStrike;
+
+    // column display order: ratio mode = Strike1(base)/Strike2(shifted);
+    // calendar/diagonal mode = Far first, Near second (matches the Far-Near×Ratio formula)
+    let vol1Cell, vol2Cell, strike1Disp, strike2Disp;
+    if(mode === 'calendar'){
+      vol1Cell = leg2 ? volCell(leg2) : '<span class="na">#N/A</span>';
+      vol2Cell = ratioZero ? '<span class="na">#N/A</span>' : volCell(leg1);
+      strike1Disp = s2!==null ? fmtStrike(s2) : '<span class="na">#N/A</span>';
+      strike2Disp = ratioZero ? '<span class="na">#N/A</span>' : fmtStrike(s1);
+    } else {
+      vol1Cell = volCell(leg1);
+      vol2Cell = (ratioZero || !leg2) ? '<span class="na">#N/A</span>' : volCell(leg2);
+      strike1Disp = fmtStrike(s1);
+      strike2Disp = (ratioZero || s2===null) ? '<span class="na">#N/A</span>' : fmtStrike(s2);
+    }
+
+    const canTrade = !ratioZero && leg1 && leg2 && (leg1.bid!=null||leg1.ask!=null||leg1.ltp!=null) && (leg2.bid!=null||leg2.ask!=null||leg2.ltp!=null);
+    const disabledReason = ratioZero ? 'Ratio is 0 — single-leg row, nothing to trade as a spread' : 'No exact-match strike at this Gap — try Auto-Gap or a Gap value that lines up with the live strike spacing';
+    const tradeBtns = `<span class="sp-trade-btns">
+        <button class="sp-trade-btn buy" data-side="${side}" data-s1="${s1}" data-s2="${s2!==null?s2:''}" data-e1="${expiry1}" data-e2="${expiry2}" data-ratio="${ratio}" data-mode="${mode}" data-dir="buy" ${canTrade?'':'disabled'} title="${canTrade?'Buy this spread':disabledReason}">B</button>
+        <button class="sp-trade-btn sell" data-side="${side}" data-s1="${s1}" data-s2="${s2!==null?s2:''}" data-e1="${expiry1}" data-e2="${expiry2}" data-ratio="${ratio}" data-mode="${mode}" data-dir="sell" ${canTrade?'':'disabled'} title="${canTrade?'Sell this spread':disabledReason}">S</button>
+      </span>`;
+
+    // context needed to chart this exact spread from real Delta candle
+    // history — leg ordering matches the ltp formula above so the chart's
+    // math (sym1.close - ratio*sym2.close) lines up with what the ladder shows.
+    // Special case Ratio=0: it's really a single-leg row now, so chart just
+    // that one leg's own price history (sym2=sym1 makes the same formula
+    // reduce to sym1.close - 0×sym1.close = sym1.close automatically).
+    let canChart, chartCtx = null;
+    if(ratioZero){
+      const soloLeg = mode === 'calendar' ? leg2 : leg1;
+      const soloExpiry = mode === 'calendar' ? expiry2 : expiry1;
+      const soloStrike = mode === 'calendar' ? s2 : s1;
+      canChart = !!soloLeg;
+      if(canChart){
+        chartCtx = { sym1: soloLeg.symbol, sym2: soloLeg.symbol, ratio: 0, side, s1: soloStrike, s2: soloStrike, single: true, modeLabel: (mode==='calendar'?'Calendar/Diagonal':'Ratio')+' spread · '+soloExpiry };
+      }
+    } else {
+      canChart = !!leg2;
+      if(canChart){
+        chartCtx = (mode === 'calendar')
+          ? { sym1: leg2.symbol, sym2: leg1.symbol, ratio, side, s1: s2, s2: s1, modeLabel: 'Calendar/Diagonal spread · '+expiry1+' → '+expiry2 }
+          : { sym1: leg1.symbol, sym2: leg2.symbol, ratio, side, s1: s1, s2: s2, modeLabel: 'Ratio spread · '+expiry1 };
+      }
+    }
+
+    const alertId = `${n}|${side}|${expiry1}|${expiry2}|${s1}|${s2!==null?s2:''}`;
+    rowValues[alertId] = { ltp, bid: bidV, ask: askV };
+    const hasAlert = state.alerts.some(a=>a.id===alertId);
+
+    rows += `<tr class="${isAtm?'atm-row':''}" data-alertid="${alertId}">
+      <td>${vol1Cell}</td>
+      <td>${vol2Cell}</td>
+      <td class="strike-cell">${strike1Disp}</td>
+      <td class="strike-cell">${strike2Disp}</td>
+      <td class="${canChart?'sp-ltp-cell':''}" ${canChart?`data-chart='${JSON.stringify(chartCtx)}' title="Click for spread history chart"`:''}>${cell(ltp)}</td>
+      <td class="bid">${cell(bidV)}</td>
+      <td class="ask">${cell(askV)}</td>
+      <td class="sp-trade-col">${tradeBtns}</td>
+      <td class="sp-alert-col"><button class="bell-btn${hasAlert?' set':''}" data-alertid="${alertId}">🔔</button></td>
+    </tr>`;
+  });
+  body.innerHTML = rows;
+
+  body.querySelectorAll('.bell-btn').forEach(btn=>{
+    btn.addEventListener('click', (e)=>{
+      e.stopPropagation();
+      openAlertPopover(btn.dataset.alertid);
+    });
+  });
+  evaluateAlerts(rowValues, body);
+
+  body.querySelectorAll('.sp-ltp-cell').forEach(td=>{
+    td.addEventListener('click', ()=>{
+      openSpreadHistory(JSON.parse(td.dataset.chart));
+    });
+  });
+
+  body.querySelectorAll('.sp-trade-btn').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      openOrderQtyModal({
+        side: btn.dataset.side,
+        s1: parseFloat(btn.dataset.s1),
+        s2: parseFloat(btn.dataset.s2),
+        expiry1: btn.dataset.e1,
+        expiry2: btn.dataset.e2,
+        ratio: (v => isNaN(v) ? 1 : v)(parseFloat(btn.dataset.ratio)),
+        mode: btn.dataset.mode,
+        dir: btn.dataset.dir,
+      });
+      const row = btn.closest('tr');
+      row.style.transition='none'; row.style.background='var(--strike-hl)';
+      requestAnimationFrame(()=>{ row.style.transition='background .6s'; row.style.background=''; });
+    });
+  });
+}
+
+// Adds both legs of a Ratio or Calendar/Diagonal spread to the payoff
+// draft as one basket, using the same fill convention as everywhere else
+// in the dashboard: buying a leg fills at its ask, selling fills at its
+// bid. The spread's own BID/ASK ladder columns are NOT used here — each
+// leg is priced individually off the live chain at click-time.
+//
+// Ratio mode   (Spread = Strike1(base) − Strike2(shifted)×Ratio):
+//   Buy spread  -> BUY 1x leg1(base),    SELL ratio x leg2(shifted)
+//   Sell spread -> SELL 1x leg1(base),   BUY  ratio x leg2(shifted)
+// Calendar/diagonal mode (Spread = Far − Near×Ratio, leg1=near/expiry1, leg2=far/expiry2):
+//   Buy spread  -> BUY 1x leg2(far),     SELL ratio x leg1(near)
+//   Sell spread -> SELL 1x leg2(far),    BUY  ratio x leg1(near)
+// Shared by both the paper-draft basket (tradeSpreadBasket) and the live
+// order flow (openOrderQtyModal) — resolves which physical leg plays the
+// "single" (base qty) role vs the "×Ratio" role for a given spread mode,
+// and looks up each leg's live chain row (which carries its Delta symbol).
+function resolveSpreadLegs({side, s1, s2, expiry1, expiry2, ratio, mode, dir}){
+  if(s2===null || isNaN(s2)) return null;
+  const contractType = side==='call' ? 'call_options' : 'put_options';
+  const row1 = state.raw.find(r=>r.strike===s1 && r.expiry===expiry1 && r.contract_type===contractType);
+  const row2 = state.raw.find(r=>r.strike===s2 && r.expiry===expiry2 && r.contract_type===contractType);
+  if(!row1 || !row2) return null;
+  let singleStrike, singleExpiry, singleRow, ratioStrike, ratioExpiry, ratioRow;
+  if(mode === 'calendar'){
+    singleStrike=s2; singleExpiry=expiry2; singleRow=row2;
+    ratioStrike=s1; ratioExpiry=expiry1; ratioRow=row1;
+  } else {
+    singleStrike=s1; singleExpiry=expiry1; singleRow=row1;
+    ratioStrike=s2; ratioExpiry=expiry2; ratioRow=row2;
+  }
+  const buySingle = dir === 'buy';
+  return { side, mode, dir, ratio, buySingle, singleRow, ratioRow, singleStrike, ratioStrike, singleExpiry, ratioExpiry };
+}
+
+function tradeSpreadBasket({side, s1, s2, expiry1, expiry2, ratio, mode, dir}){
+  if(s2===null || isNaN(s2)) return; // no exact-match far/shifted strike — nothing to build
+  const contractType = side==='call' ? 'call_options' : 'put_options';
+  const row1 = state.raw.find(r=>r.strike===s1 && r.expiry===expiry1 && r.contract_type===contractType);
+  const row2 = state.raw.find(r=>r.strike===s2 && r.expiry===expiry2 && r.contract_type===contractType);
+  if(!row1 || !row2) return;
+
+  const priceFor = (row, wantBuy) => {
+    const fallback = row.ltp ?? row.mark ?? ((row.bid!=null&&row.ask!=null)?(row.bid+row.ask)/2:0) ?? 0;
+    return wantBuy ? (row.ask ?? fallback) : (row.bid ?? fallback);
+  };
+  const lots = Math.max(1, Math.round(ratio) || 1);
+
+  // Which physical leg plays the "single" (qty=1) role in the spread
+  // formula vs the "×Ratio" (qty=lots) role is fixed by the mode's
+  // formula — it does NOT change with buy/sell direction. Only which
+  // side of the market (buy vs sell) each leg trades on flips with dir.
+  let singleStrike, singleExpiry, singleRow, ratioStrike, ratioExpiry, ratioRow;
+  if(mode === 'calendar'){
+    // Spread = Far − Near×Ratio: far(leg2) is the single side, near(leg1) is the ratio side
+    singleStrike=s2; singleExpiry=expiry2; singleRow=row2;
+    ratioStrike=s1; ratioExpiry=expiry1; ratioRow=row1;
+  } else {
+    // Spread = Strike1(base) − Strike2(shifted)×Ratio: base(leg1) is the single side
+    singleStrike=s1; singleExpiry=expiry1; singleRow=row1;
+    ratioStrike=s2; ratioExpiry=expiry2; ratioRow=row2;
+  }
+
+  // Buying the spread = BUY the single-role leg, SELL the ratio-role leg
+  // (at ratio×qty). Selling the spread reverses both legs' side, same qtys.
+  const buySingle = dir === 'buy';
+  const singlePremium = priceFor(singleRow, buySingle);
+  const ratioPremium = priceFor(ratioRow, !buySingle);
+  tradePayoffLeg(side, singleStrike, singleExpiry, singlePremium||0, buySingle ? 1 : -1);
+  tradePayoffLeg(side, ratioStrike, ratioExpiry, ratioPremium||0, buySingle ? -lots : lots);
+
+  // The spread ladder re-renders on nearly every live tick, so a flash on
+  // the table row itself gets wiped out almost immediately — give feedback
+  // that survives re-renders instead: a toast, plus a live badge on the
+  // Payoff tab so it's visible even without leaving the Spread view.
+  const typeLbl = side.toUpperCase();
+  showTradeToast(dir, `${dir==='buy'?'BUY':'SELL'} 1x ${fmtStrike(singleStrike)} ${typeLbl} + ${dir==='buy'?'SELL':'BUY'} ${lots}x ${fmtStrike(ratioStrike)} ${typeLbl} added to draft`);
+
+  // Jump straight to the Payoff chart so the freshly-added spread is visible
+  // immediately, instead of leaving the user on the Spread ladder wondering
+  // where it went.
+  goToView('payoff');
+}
+
+// ==================== LIVE ORDER EXECUTION (real market orders via Delta) ====================
+// This dashboard is static and cannot safely hold the Delta API secret, so
+// live orders are relayed through a small backend (deployed separately on
+// Render) which holds the real keys. This section only builds the leg
+// payload and talks to that backend.
+const LIVE = {
+  backendUrl: localStorage.getItem('doc_live_backend_url') || '',
+  appSecret: localStorage.getItem('doc_live_app_secret') || '',
+};
+let currentOrderCtx = null;
+
+function openOrderQtyModal(params){
+  const legs = resolveSpreadLegs(params);
+  const errEl = document.getElementById('orderQtyErr');
+  errEl.style.display = 'none';
+  if(!legs){
+    errEl.textContent = 'No matching strike/expiry on the live chain for this row — cannot place an order.';
+    errEl.style.display = 'block';
+  }
+  currentOrderCtx = legs ? { ...legs, dirParam: params.dir } : null;
+  const typeLbl = params.side.toUpperCase();
+  const dirLbl = params.dir==='buy' ? 'BUY' : 'SELL';
+  const oppLbl = params.dir==='buy' ? 'SELL' : 'BUY';
+  document.getElementById('orderQtyTitle').textContent = `${dirLbl} spread: ${fmtStrike(params.s1)}/${params.s2!==null && !isNaN(params.s2) ? fmtStrike(params.s2) : '—'} (${typeLbl})`;
+  if(legs){
+    document.getElementById('orderQtyLegs').textContent =
+      `Per 1 lot entered → ${dirLbl} ${fmtStrike(legs.singleStrike)} ${typeLbl} (${legs.singleExpiry}) × qty, and ${oppLbl} ${fmtStrike(legs.ratioStrike)} ${typeLbl} (${legs.ratioExpiry}) × qty×${legs.ratio}. Both legs go as MARKET orders on Delta.`;
+  } else {
+    document.getElementById('orderQtyLegs').textContent = '';
+  }
+  document.getElementById('orderQtyInput').value = '';
+  document.getElementById('orderQtyOverlay').classList.add('open');
+  document.getElementById('orderQtyInput').focus();
+}
+function closeOrderQtyModal(){
+  document.getElementById('orderQtyOverlay').classList.remove('open');
+  currentOrderCtx = null;
+}
+document.getElementById('orderQtyCancelBtn').addEventListener('click', closeOrderQtyModal);
+document.getElementById('orderQtyOverlay').addEventListener('click', (e)=>{
+  if(e.target.id === 'orderQtyOverlay') closeOrderQtyModal();
+});
+
+async function submitSpreadOrder(){
+  const errEl = document.getElementById('orderQtyErr');
+  errEl.style.display = 'none';
+  if(!currentOrderCtx){ return; }
+  if(!LIVE.backendUrl || !LIVE.appSecret){
+    errEl.textContent = 'Live order backend not configured yet — click "🔴 Live orders" in the toolbar first.';
+    errEl.style.display = 'block';
+    return;
+  }
+  const qty = parseInt(document.getElementById('orderQtyInput').value, 10);
+  if(!qty || qty <= 0){
+    errEl.textContent = 'Enter a valid lot size (whole number, > 0).';
+    errEl.style.display = 'block';
+    return;
+  }
+  const legs = currentOrderCtx;
+  const ratioSize = Math.max(1, Math.round(qty * legs.ratio));
+  const leg1 = { symbol: legs.singleRow.symbol, side: legs.buySingle ? 'buy' : 'sell', size: qty };
+  const leg2 = { symbol: legs.ratioRow.symbol, side: legs.buySingle ? 'sell' : 'buy', size: ratioSize };
+
+  const btn = document.getElementById('orderQtyConfirmBtn');
+  const original = btn.textContent;
+  btn.textContent = 'Placing…';
+  btn.disabled = true;
+  try{
+    const res = await fetch(LIVE.backendUrl.replace(/\/$/, '') + '/api/place-spread', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-App-Secret': LIVE.appSecret },
+      body: JSON.stringify({ leg1, leg2 }),
+    });
+    const data = await res.json();
+    if(data.ok){
+      showTradeToast(legs.dirParam, `LIVE ${legs.dirParam==='buy'?'BUY':'SELL'} placed: ${qty}x ${fmtStrike(legs.singleStrike)} + ${ratioSize}x ${fmtStrike(legs.ratioStrike)} ${legs.side.toUpperCase()}`);
+      // record the executed position into the payoff draft too, using
+      // actual filled qty, so it's tracked alongside your other legs
+      const priceFor = (row, wantBuy) => {
+        const fb = row.ltp ?? row.mark ?? ((row.bid!=null&&row.ask!=null)?(row.bid+row.ask)/2:0) ?? 0;
+        return wantBuy ? (row.ask ?? fb) : (row.bid ?? fb);
+      };
+      const singlePremium = priceFor(legs.singleRow, legs.buySingle);
+      const ratioPremium = priceFor(legs.ratioRow, !legs.buySingle);
+      tradePayoffLeg(legs.side, legs.singleStrike, legs.singleExpiry, singlePremium||0, legs.buySingle ? qty : -qty);
+      tradePayoffLeg(legs.side, legs.ratioStrike, legs.ratioExpiry, ratioPremium||0, legs.buySingle ? -ratioSize : ratioSize);
+      closeOrderQtyModal();
+    } else {
+      const l1 = data.leg1, l2 = data.leg2;
+      const detail = [
+        l1 ? `Leg1(${l1.symbol}): ${l1.ok ? 'OK' : (l1.error || JSON.stringify(l1.response))}` : '',
+        l2 ? `Leg2(${l2.symbol}): ${l2.ok ? 'OK' : (l2.error || JSON.stringify(l2.response))}` : '',
+      ].filter(Boolean).join(' · ');
+      errEl.textContent = (data.error || 'Order failed.') + (detail ? ' — ' + detail : '') + (data.warning ? ' ' + data.warning : '');
+      errEl.style.display = 'block';
+    }
+  } catch(e){
+    errEl.textContent = 'Network/backend error: ' + e.message;
+    errEl.style.display = 'block';
+  } finally {
+    btn.textContent = original;
+    btn.disabled = false;
+  }
+}
+document.getElementById('orderQtyConfirmBtn').addEventListener('click', submitSpreadOrder);
+document.getElementById('orderQtyInput').addEventListener('keydown', (e)=>{ if(e.key==='Enter') submitSpreadOrder(); });
+
+// ---- live backend config modal ----
+document.getElementById('liveTradeSettingsBtn').addEventListener('click', ()=>{
+  document.getElementById('liveBackendUrl').value = LIVE.backendUrl;
+  document.getElementById('liveAppSecret').value = LIVE.appSecret;
+  document.getElementById('liveTradeSettingsOverlay').classList.add('open');
+});
+document.getElementById('liveCloseBtn').addEventListener('click', ()=>{
+  document.getElementById('liveTradeSettingsOverlay').classList.remove('open');
+});
+document.getElementById('liveTradeSettingsOverlay').addEventListener('click', (e)=>{
+  if(e.target.id === 'liveTradeSettingsOverlay') document.getElementById('liveTradeSettingsOverlay').classList.remove('open');
+});
+document.getElementById('liveSaveBtn').addEventListener('click', ()=>{
+  LIVE.backendUrl = document.getElementById('liveBackendUrl').value.trim();
+  LIVE.appSecret = document.getElementById('liveAppSecret').value.trim();
+  localStorage.setItem('doc_live_backend_url', LIVE.backendUrl);
+  localStorage.setItem('doc_live_app_secret', LIVE.appSecret);
+  document.getElementById('liveTradeSettingsOverlay').classList.remove('open');
+});
+document.getElementById('liveTestBtn').addEventListener('click', async ()=>{
+  const url = document.getElementById('liveBackendUrl').value.trim();
+  const btn = document.getElementById('liveTestBtn');
+  const original = btn.textContent;
+  if(!url){ btn.textContent = 'Enter a URL first'; setTimeout(()=>btn.textContent=original, 2000); return; }
+  btn.textContent = 'Testing…';
+  try{
+    const res = await fetch(url.replace(/\/$/, '') + '/api/health');
+    const data = await res.json();
+    btn.textContent = data.delta_key_configured ? 'Connected ✓ (keys set)' : 'Connected, but Delta keys missing on server';
+  }catch(e){
+    btn.textContent = 'Failed: ' + e.message;
+  }
+  setTimeout(()=>{ btn.textContent = original; }, 3000);
+});
+
+// Toast notifications for actions whose visual context (like a spread
+// ladder row) gets re-rendered away before the user can register a flash.
+let toastSeq = 0;
+function showTradeToast(kind, text){
+  const stack = document.getElementById('tradeToastStack');
+  if(!stack) return;
+  const id = 'toast_' + (++toastSeq);
+  const el = document.createElement('div');
+  el.className = `trade-toast ${kind==='sell'?'sell':'buy'}`;
+  el.id = id;
+  el.innerHTML = `<span class="toast-icon">${kind==='sell'?'S':'B'}</span><span>${text}</span>`;
+  stack.appendChild(el);
+  // cap the stack so rapid clicking doesn't pile up forever
+  while(stack.children.length > 4) stack.removeChild(stack.firstChild);
+  setTimeout(()=>{
+    el.classList.add('leaving');
+    setTimeout(()=>el.remove(), 260);
+  }, 2200);
+}
+
+// Live leg-count badge on the Payoff nav tab — visible feedback that a
+// trade landed in the draft even while the user stays on the Spread view.
+function updatePayoffNavBadge(){
+  const badge = document.getElementById('payoffNavBadge');
+  if(!badge) return;
+  const n = state.payoffLegs.length;
+  if(n > 0){
+    badge.textContent = n;
+    badge.style.display = 'inline-flex';
+  } else {
+    badge.style.display = 'none';
+  }
+}
+
+// ================= SPREAD HISTORY CHART (click a spread's LTP to chart it) =================
+// Pulls REAL historical candles for each leg from Delta's REST candle-history
+// API and derives the spread series client-side (leg1.close - ratio*leg2.close),
+// then renders it with Chart.js. No synthetic/sampled data — this is the same
+// approach as the reference dashboard, just wired up for both Ratio and
+// Calendar/Diagonal spread modes (which use different leg orderings).
+let spreadChartInstance = null;
+let currentChartCtx = null;
+
+async function fetchSpreadCandles(symbol, resolution, days){
+  const end = Math.floor(Date.now()/1000);
+  const start = end - days*86400;
+  const url = `https://api.india.delta.exchange/v2/history/candles?resolution=${resolution}&symbol=${encodeURIComponent(symbol)}&start=${start}&end=${end}`;
+  const res = await fetch(url);
+  if(!res.ok) throw new Error('HTTP ' + res.status);
+  const json = await res.json();
+  return (json.result || []).slice().sort((a,b)=>a.time-b.time);
+}
+
+async function renderSpreadChart(ctx, resolution, days){
+  const wrap = document.getElementById('shChartWrap');
+  const statsEl = document.getElementById('shStats');
+  if(typeof Chart === 'undefined'){
+    wrap.innerHTML = '<div class="sh-empty">Chart library failed to load from CDN — check your internet connection and reload the page.</div>';
+    return;
+  }
+  wrap.innerHTML = '<div class="sh-empty">Loading candles…</div>';
+  statsEl.innerHTML = '';
+
+  try{
+    const [c1, c2] = ctx.single
+      ? await fetchSpreadCandles(ctx.sym1, resolution, days).then(c=>[c,c])
+      : await Promise.all([
+          fetchSpreadCandles(ctx.sym1, resolution, days),
+          fetchSpreadCandles(ctx.sym2, resolution, days)
+        ]);
+    if(c1.length === 0 || c2.length === 0){
+      wrap.innerHTML = '<div class="sh-empty">No candle history returned for this timeframe/resolution — the exchange may not have data this far back for one of the legs (e.g. a recently-listed strike).</div>';
+      return;
+    }
+    const map2 = new Map(c2.map(c=>[c.time, c]));
+    const points = [];
+    c1.forEach(c=>{
+      const other = map2.get(c.time);
+      if(other && c.close!=null && other.close!=null){
+        points.push({ t: c.time*1000, spread: c.close - ctx.ratio*other.close });
+      }
+    });
+    if(points.length === 0){
+      wrap.innerHTML = '<div class="sh-empty">Legs did not share overlapping candle timestamps.</div>';
+      return;
+    }
+
+    // quick stats row: last / change / low / high over the visible range
+    const vals = points.map(p=>p.spread);
+    const last = vals[vals.length-1], first = vals[0];
+    const min = Math.min(...vals), max = Math.max(...vals);
+    const chg = last-first;
+    const chgPct = first ? (chg/Math.abs(first))*100 : null;
+    const chgColor = chg>=0 ? 'var(--call)' : 'var(--put)';
+    statsEl.innerHTML = `
+      <div class="sh-stat"><span class="sh-stat-lbl">Last</span><span class="sh-stat-val">${fmt(last,2)}</span></div>
+      <div class="sh-stat"><span class="sh-stat-lbl">Change</span><span class="sh-stat-val" style="color:${chgColor}">${chg>=0?'+':''}${fmt(chg,2)}${chgPct!=null?' ('+(chgPct>=0?'+':'')+fmt(chgPct,1)+'%)':''}</span></div>
+      <div class="sh-stat"><span class="sh-stat-lbl">Low</span><span class="sh-stat-val">${fmt(min,2)}</span></div>
+      <div class="sh-stat"><span class="sh-stat-lbl">High</span><span class="sh-stat-val">${fmt(max,2)}</span></div>
+    `;
+
+    wrap.innerHTML = '';
+    const canvas = document.createElement('canvas');
+    canvas.id = 'shCanvas';
+    wrap.appendChild(canvas);
+
+    // short label for the x-axis (kept sparse by autoSkip below) + a full
+    // date+time string per point for the tooltip title, independent of range
+    const useDayLabel = days > 10;
+    const labels = points.map(p=>{
+      const d = new Date(p.t);
+      return useDayLabel
+        ? d.toLocaleDateString(undefined,{month:'short',day:'numeric'})
+        : d.toLocaleTimeString(undefined,{hour:'2-digit',minute:'2-digit'});
+    });
+    const fullLabels = points.map(p=>{
+      const d = new Date(p.t);
+      return d.toLocaleDateString(undefined,{weekday:'short',month:'short',day:'numeric'}) + ', ' + d.toLocaleTimeString(undefined,{hour:'2-digit',minute:'2-digit',second: days<=1?'2-digit':undefined});
+    });
+
+    const styles = getComputedStyle(document.documentElement);
+    const mutedColor = styles.getPropertyValue('--muted').trim();
+    const gridColor = styles.getPropertyValue('--border-soft').trim();
+    const textColor = styles.getPropertyValue('--text').trim();
+    const surfaceColor = styles.getPropertyValue('--surface').trim();
+    const borderColor = styles.getPropertyValue('--border').trim();
+    const monoFont = styles.getPropertyValue('--mono').trim();
+    const lineColor = ctx.side==='call' ? styles.getPropertyValue('--call').trim() : styles.getPropertyValue('--put').trim();
+
+    // draws a dashed vertical guide line through the point currently under
+    // the cursor/finger, so dragging across the chart feels like the native
+    // app screenshot — not just a floating tooltip with nothing to anchor it
+    const crosshairPlugin = {
+      id: 'shCrosshair',
+      afterDatasetsDraw(chart){
+        const active = chart.getActiveElements();
+        if(!active || !active.length) return;
+        const { ctx: c, chartArea } = chart;
+        const x = active[0].element.x;
+        c.save();
+        c.beginPath();
+        c.moveTo(x, chartArea.top);
+        c.lineTo(x, chartArea.bottom);
+        c.lineWidth = 1;
+        c.strokeStyle = mutedColor;
+        c.setLineDash([4,4]);
+        c.stroke();
+        c.restore();
+      }
+    };
+
+    if(spreadChartInstance){ spreadChartInstance.destroy(); }
+    spreadChartInstance = new Chart(canvas.getContext('2d'), {
+      type: 'line',
+      data: {
+        labels,
+        datasets: [{
+          label: 'Spread (traded price)',
+          data: points.map(p=>p.spread),
+          borderColor: lineColor,
+          backgroundColor: lineColor + '1f',
+          fill: true,
+          borderWidth: 1.8,
+          pointRadius: 0,
+          pointHitRadius: 12,
+          pointHoverRadius: 4,
+          pointHoverBackgroundColor: lineColor,
+          pointHoverBorderColor: surfaceColor,
+          pointHoverBorderWidth: 2,
+          tension: 0.15
+        }]
+      },
+      plugins: [crosshairPlugin],
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        animation: false,
+        events: ['mousemove','mouseout','click','touchstart','touchmove','touchend'],
+        interaction: { mode: 'index', intersect: false, axis: 'x' }, // drag/hover anywhere on the x-axis snaps to the nearest point
+        scales: {
+          x: {
+            ticks: { color: mutedColor, maxRotation:0, autoSkip:true, maxTicksLimit:7, font:{family: monoFont, size:10} },
+            grid: { color: gridColor }
+          },
+          y: {
+            ticks: { color: mutedColor, font:{family: monoFont, size:10} },
+            grid: { color: gridColor }
+          }
+        },
+        plugins: {
+          legend: { display:false },
+          tooltip: {
+            backgroundColor: surfaceColor,
+            borderColor: borderColor,
+            borderWidth: 1,
+            titleColor: mutedColor,
+            titleFont: { family: monoFont, size: 10, weight: '600' },
+            bodyColor: textColor,
+            bodyFont: { family: monoFont, size: 13, weight: '700' },
+            padding: 10,
+            displayColors: false,
+            callbacks: {
+              title: items => items.length ? fullLabels[items[0].dataIndex] : '',
+              label: c => 'Spread: ' + fmt(c.parsed.y, 2)
+            }
+          }
+        }
+      }
+    });
+  } catch(e){
+    wrap.innerHTML = `<div class="sh-empty">Couldn't load candles: ${e.message}</div>`;
+  }
+}
+
+function openSpreadHistory(ctx){
+  currentChartCtx = ctx;
+  document.getElementById('shTitle').textContent = ctx.single
+    ? fmtStrike(ctx.s1).replace(/<[^>]+>/g,'')
+    : `${fmtStrike(ctx.s1).replace(/<[^>]+>/g,'')} / ${fmtStrike(ctx.s2).replace(/<[^>]+>/g,'')}`;
+  document.getElementById('shSub').textContent = ctx.single
+    ? `${ctx.side==='call'?'CALL':'PUT'} ${ctx.modeLabel} · ${ctx.sym1} (single leg — Ratio 0)`
+    : `${ctx.side==='call'?'CALL':'PUT'} ${ctx.modeLabel} · ${ctx.sym1} − ${fmt(ctx.ratio,2)}×${ctx.sym2}`;
+  document.getElementById('shOverlay').style.display = 'flex';
+  document.querySelectorAll('#shRange button').forEach(b=>b.classList.remove('active'));
+  const defaultBtn = document.querySelector('#shRange button[data-days="1"]'); // default view: 1D, matches the reference chart's default
+  defaultBtn.classList.add('active');
+  renderSpreadChart(ctx, defaultBtn.dataset.res, parseInt(defaultBtn.dataset.days,10));
+}
+
+function closeSpreadHistory(){
+  document.getElementById('shOverlay').style.display = 'none';
+  if(spreadChartInstance){ spreadChartInstance.destroy(); spreadChartInstance = null; }
+}
+
+document.getElementById('shCloseBtn').addEventListener('click', closeSpreadHistory);
+document.getElementById('shOverlay').addEventListener('click', closeSpreadHistory);
+document.addEventListener('keydown', e=>{ if(e.key==='Escape' && document.getElementById('shOverlay').style.display==='flex') closeSpreadHistory(); });
+document.getElementById('shRange').addEventListener('click', e=>{
+  const btn = e.target.closest('button[data-res]');
+  if(!btn || !currentChartCtx) return;
+  document.querySelectorAll('#shRange button').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  renderSpreadChart(currentChartCtx, btn.dataset.res, parseInt(btn.dataset.days,10));
+});
+
+
+function renderSpreads(){
+  BUILDER_IDS.forEach(n=>{
+    renderSideSpread(n, 'call', 1);
+    renderSideSpread(n, 'put', -1);
+  });
+}
+
+function renderEmpty(msg, err){
+  const tbody = document.getElementById('chainBody');
+  if(err){
+    tbody.innerHTML = `<tr><td colspan="15"><div class="empty-state">
+      <div class="big">Couldn't reach Delta Exchange</div>
+      <div class="small">The initial REST snapshot (api.india.delta.exchange) or the live WebSocket
+      (socket.india.delta.exchange) was blocked by the browser, or the network is offline.
+      Try opening this file over <code>https://</code> rather than <code>file://</code>, or let me know and I'll add a small proxy.</div>
+    </div></td></tr>`;
+  } else {
+    tbody.innerHTML = `<tr><td colspan="15"><div class="empty-state"><div class="big">${msg}</div></div></td></tr>`;
+  }
+}
+
+// ================= PAYOFF (multi-leg, draggable spot) =================
+// Leg model: one leg per (strike, type, expiry). qty is SIGNED —
+// positive = net long, negative = net short. Buying/selling nets against
+// the existing qty (weighted-avg premium on same-direction adds), and a
+// leg that crosses zero correctly flips side instead of leaving stale
+// buy+sell rows sitting side by side.
+
+function savePayoffLegs(){
+  localStorage.setItem('doc_portfolios', JSON.stringify(state.portfolios));
+}
+
+state.payoffDirty = false;
+
+function markPayoffDirty(){
+  state.payoffDirty = true;
+  updateSaveButtonState();
+}
+
+function updateSaveButtonState(){
+  const btn = document.getElementById('savePortfolioBtn');
+  if(!btn) return;
+  btn.classList.toggle('dirty', state.payoffDirty);
+  btn.textContent = state.payoffDirty ? '● Save' : 'Saved';
+  btn.disabled = !state.payoffDirty;
+}
+
+function saveActivePortfolio(){
+  savePayoffLegs();
+  state.payoffDirty = false;
+  updateSaveButtonState();
+  renderPortfolioSelect();
+  flashSavedNote('Saved');
+}
+
+// ---- portfolio CRUD ----
+function genPortfolioId(){ return 'pf_' + Date.now() + '_' + Math.floor(Math.random()*1000); }
+
+function flashSavedNote(text){
+  const note = document.getElementById('portfolioSavedNote');
+  note.textContent = text;
+  note.classList.add('show');
+  clearTimeout(flashSavedNote._t);
+  flashSavedNote._t = setTimeout(()=>note.classList.remove('show'), 1800);
+}
+
+function renderPortfolioSelect(){
+  const sel = document.getElementById('portfolioSelect');
+  sel.innerHTML = Object.keys(state.portfolios).map(id=>{
+    const p = state.portfolios[id];
+    return `<option value="${id}" ${id===state.activePortfolioId?'selected':''}>${escapeHtml(p.name)}</option>`;
+  }).join('');
+  const countEl = document.getElementById('portfolioLegsCount');
+  if(countEl){
+    const activeLegs = state.portfolios[state.activePortfolioId]?.legs.length || 0;
+    countEl.textContent = activeLegs ? `${activeLegs} leg${activeLegs===1?'':'s'}` : 'no legs';
+  }
+}
+
+function escapeHtml(s){ return String(s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+// Reloads the active portfolio's legs fresh from localStorage, discarding
+// any unsaved in-memory draft changes (used when switching away without saving)
+function discardDraft(){
+  const saved = loadPortfolios();
+  if(saved[state.activePortfolioId]){
+    state.portfolios[state.activePortfolioId].legs = saved[state.activePortfolioId].legs;
+  }
+  state.payoffDirty = false;
+  updateSaveButtonState();
+}
+
+function switchPortfolio(id){
+  if(!state.portfolios[id]) return;
+  if(state.payoffDirty){
+    if(!confirm('You have unsaved changes in the current draft. Discard them and switch?')) return;
+    discardDraft();
+  }
+  state.activePortfolioId = id;
+  localStorage.setItem('doc_active_portfolio', id);
+  state.payoffSpotOverride = null;
+  renderPortfolioSelect();
+  renderPayoff();
+  renderTable();
+}
+
+function newPortfolio(){
+  const name = prompt('Name this portfolio:', 'Portfolio ' + (Object.keys(state.portfolios).length+1));
+  if(name === null) return;
+  const id = genPortfolioId();
+  state.portfolios[id] = { name: name.trim() || 'Untitled', legs: [] };
+  savePayoffLegs();
+  state.payoffDirty = false;
+  switchPortfolio(id);
+  flashSavedNote('Created');
+}
+
+function renamePortfolio(){
+  const p = state.portfolios[state.activePortfolioId];
+  const name = prompt('Rename portfolio:', p.name);
+  if(name === null) return;
+  p.name = name.trim() || p.name;
+  savePayoffLegs();
+  renderPortfolioSelect();
+  flashSavedNote('Renamed');
+}
+
+function duplicatePortfolio(){
+  const p = state.portfolios[state.activePortfolioId];
+  const id = genPortfolioId();
+  state.portfolios[id] = { name: p.name + ' copy', legs: JSON.parse(JSON.stringify(p.legs)) };
+  savePayoffLegs();
+  state.payoffDirty = false;
+  switchPortfolio(id);
+  flashSavedNote('Duplicated');
+}
+
+function deletePortfolio(){
+  const ids = Object.keys(state.portfolios);
+  if(ids.length <= 1){ alert("Can't delete the only portfolio — clear its legs instead."); return; }
+  const p = state.portfolios[state.activePortfolioId];
+  if(!confirm(`Delete portfolio "${p.name}"? This can't be undone.`)) return;
+  delete state.portfolios[state.activePortfolioId];
+  savePayoffLegs();
+  state.payoffDirty = false;
+  switchPortfolio(Object.keys(state.portfolios)[0]);
+  flashSavedNote('Deleted');
+}
+
+document.getElementById('savePortfolioBtn').addEventListener('click', saveActivePortfolio);
+document.getElementById('portfolioSelect').addEventListener('change', e=>switchPortfolio(e.target.value));
+document.getElementById('newPortfolioBtn').addEventListener('click', newPortfolio);
+document.getElementById('renamePortfolioBtn').addEventListener('click', renamePortfolio);
+document.getElementById('duplicatePortfolioBtn').addEventListener('click', duplicatePortfolio);
+document.getElementById('deletePortfolioBtn').addEventListener('click', deletePortfolio);
+renderPortfolioSelect();
+updatePayoffNavBadge();
+
+function legKey(l){ return (l.underlying||state.underlying) + '|' + l.type + '|' + l.strike + '|' + l.expiry; }
+
+// delta: +n to buy n lots, -n to sell n lots, at the given premium.
+// This mutates the in-memory draft only — it does NOT persist to
+// localStorage. The user must hit "Save" to commit the draft, so casually
+// browsing the chain and clicking B/S doesn't silently overwrite a saved
+// portfolio (Sensibull-style: watch freely, save only when you mean to).
+function tradePayoffLeg(type, strike, expiry, premium, delta){
+  const underlying = state.underlying;
+  const key = underlying + '|' + type + '|' + strike + '|' + expiry;
+  let leg = state.payoffLegs.find(l=>legKey(l)===key);
+  if(!leg){
+    if(delta === 0) return;
+    leg = { id:'leg_'+Date.now()+'_'+Math.floor(Math.random()*1000), type, strike, expiry, underlying, qty:0, avgPremium:premium };
+    state.payoffLegs.push(leg);
+  }
+  const oldQty = leg.qty;
+  const newQty = oldQty + delta;
+  // same-direction add (or opening from flat): blend into a qty-weighted
+  // average entry premium, same convention as a real position book
+  if((oldQty >= 0 && delta > 0) || (oldQty <= 0 && delta < 0) || oldQty === 0){
+    const oldAbs = Math.abs(oldQty), addAbs = Math.abs(delta);
+    leg.avgPremium = (leg.avgPremium*oldAbs + premium*addAbs) / (oldAbs+addAbs);
+    leg.manualPremium = false; // a real chain price just got blended in
+  } else if(Math.abs(delta) > Math.abs(oldQty)){
+    // crossing through zero to the opposite side: the leftover beyond
+    // what closed the old position opens fresh at today's premium
+    leg.avgPremium = premium;
+    leg.manualPremium = false;
+  }
+  // reducing/closing (opposite-direction, |delta| <= |oldQty|) keeps the
+  // existing avgPremium as-is — closing doesn't change the entry price
+  leg.qty = newQty;
+  if(Math.round(leg.qty*1e6) === 0){
+    state.payoffLegs = state.payoffLegs.filter(l=>l.id!==leg.id);
+  }
+  markPayoffDirty();
+  if(state.view === 'payoff') renderPayoff();
+  renderTable(); // refresh B/S/qty badges in the chain
+  updatePayoffNavBadge();
+}
+
+function removePayoffLeg(id){
+  state.payoffLegs = state.payoffLegs.filter(l=>l.id!==id);
+  markPayoffDirty();
+  renderPayoff();
+  renderTable();
+}
+
+function setPayoffLegQty(id, absQty){
+  const leg = state.payoffLegs.find(l=>l.id===id);
+  if(!leg) return;
+  absQty = Math.max(1, Math.round(absQty)||1);
+  leg.qty = Math.sign(leg.qty || 1) * absQty;
+  markPayoffDirty();
+  renderPayoff();
+  renderTable();
+}
+
+// Lets the user override a leg's entry price by hand — e.g. they actually
+// got filled at a different price than what was auto-picked from bid/ask
+// at add-time, or they want to simulate "what if my entry had been X".
+// Marked manualPremium so tradePayoffLeg() knows not to silently blend a
+// fresh bid/ask average into a price the user deliberately set.
+function setPayoffLegPremium(id, price){
+  const leg = state.payoffLegs.find(l=>l.id===id);
+  if(!leg || isNaN(price) || price < 0) { renderPayoff(); return; }
+  leg.avgPremium = price;
+  leg.manualPremium = true;
+  markPayoffDirty();
+  renderPayoff();
+  renderTable();
+}
+
+document.getElementById('clearLegsBtn').addEventListener('click', ()=>{
+  state.payoffLegs = [];
+  state.payoffSpotOverride = null;
+  markPayoffDirty();
+  renderPayoff();
+  renderTable();
+});
+
+// net position lookup used by the chain view's B/S badge
+function positionAt(strike, type, expiry){
+  return state.payoffLegs.find(l=>l.type===type && l.strike===strike && l.expiry===expiry && (l.underlying||state.underlying)===state.underlying) || null;
+}
+
+// ---- Black-Scholes: needed so calendar/diagonal payoffs show real curves ----
+// A calendar/diagonal spread has legs on TWO different expiries. The payoff
+// chart's x-axis (and every "at expiry" P&L) is evaluated as of the NEAR
+// leg's expiry date, because that's the first date the whole position
+// actually changes shape. At that date:
+//   - the near leg (expiry === evalDate) is settling -> pure intrinsic value
+//   - the far leg (expiry is still in the future)     -> still has time
+//     value left, priced by Black-Scholes off its own IV, so its value
+//     curves smoothly through the money instead of kinking at the strike.
+// Without this, "at expiry" value for an unexpired leg was being computed
+// as pure intrinsic too, which is what was producing the flat/kinked line
+// instead of a proper curve for calendar/diagonal spreads.
+function erf(x){
+  // Abramowitz-Stegun 7.1.26 approximation, good to ~1.5e-7
+  const sign = x < 0 ? -1 : 1;
+  x = Math.abs(x);
+  const a1=0.254829592, a2=-0.284496736, a3=1.421413741, a4=-1.453152027, a5=1.061405429, p=0.3275911;
+  const t = 1/(1+p*x);
+  const y = 1-(((((a5*t+a4)*t+a3)*t+a2)*t+a1)*t)*Math.exp(-x*x);
+  return sign*y;
+}
+function normCdf(x){ return 0.5*(1+erf(x/Math.SQRT2)); }
+
+// Black-Scholes value of a single option (no dividend/carry — matches how
+// crypto perpetual-style option premiums are quoted on this desk).
+function bsPrice(type, S, K, tYears, iv, r=0){
+  if(tYears <= 0 || iv == null || iv <= 0 || S<=0 || K<=0){
+    return type==='call' ? Math.max(0,S-K) : Math.max(0,K-S);
+  }
+  const sqrtT = Math.sqrt(tYears);
+  const d1 = (Math.log(S/K) + (r + 0.5*iv*iv)*tYears) / (iv*sqrtT);
+  const d2 = d1 - iv*sqrtT;
+  if(type === 'call'){
+    return S*normCdf(d1) - K*Math.exp(-r*tYears)*normCdf(d2);
+  }
+  return K*Math.exp(-r*tYears)*normCdf(-d2) - S*normCdf(-d1);
+}
+
+// Days between two 'YYYY-MM-DD' expiry strings (or from "today" if fromDate omitted).
+function daysBetween(fromDate, toDateStr){
+  const to = new Date(toDateStr + 'T00:00:00Z').getTime();
+  const from = fromDate.getTime();
+  return (to - from) / 86400000;
+}
+
+// The date the payoff chart is evaluated "as of". For a single-expiry
+// position this is just that expiry. For a multi-expiry (calendar/diagonal)
+// position, it's the EARLIEST leg expiry — the soonest date the position's
+// shape actually changes.
+function payoffEvalDate(){
+  const expiries = state.payoffLegs.map(l=>l.expiry).filter(Boolean).sort();
+  return expiries.length ? expiries[0] : null;
+}
+
+// Live IV for a leg's own contract right now, used as our best estimate of
+// its IV at the future eval date too (IV term-structure isn't modeled —
+// this is an approximation, same spirit as the rest of this dashboard's
+// live-quote-driven analytics).
+function legLiveIv(leg){
+  const row = state.raw.find(r=>r.strike===leg.strike && r.expiry===leg.expiry && r.contract_type===(leg.type==='call'?'call_options':'put_options'));
+  return row && row.iv ? row.iv : null;
+}
+
+// P&L of a single leg at underlying price 'S', evaluated as of evalDateStr.
+//   - if leg.expiry === evalDateStr (or is in the past relative to it): the
+//     leg is expiring/expired -> settle at pure intrinsic value.
+//   - if leg.expiry is still in the future: price it with Black-Scholes
+//     using the leg's live IV and the remaining time to ITS OWN expiry,
+//     which is what makes calendar/diagonal payoffs curve realistically
+//     instead of flat-lining.
+// qty is signed: positive (long) profits like a buyer, negative (short)
+// profits like a seller — one formula covers both via the sign.
+function legValueAt(leg, S, evalDateStr){
+  const K = leg.strike;
+  if(!leg.expiry || !evalDateStr || leg.expiry <= evalDateStr){
+    return leg.type === 'call' ? Math.max(0, S-K) : Math.max(0, K-S);
+  }
+  const evalDate = new Date(evalDateStr + 'T00:00:00Z');
+  const remainingDays = daysBetween(evalDate, leg.expiry);
+  const tYears = Math.max(remainingDays,0) / 365;
+  const iv = legLiveIv(leg) ?? 0.6; // sane fallback if IV briefly unavailable
+  return bsPrice(leg.type, S, K, tYears, iv);
+}
+
+function legPnlAt(leg, S, evalDateStr){
+  const value = legValueAt(leg, S, evalDateStr ?? payoffEvalDate());
+  return (value - leg.avgPremium) * leg.qty * legLotUnitSize(leg);
+}
+
+function combinedPnlAt(S, evalDateStr){
+  const evalDate = evalDateStr ?? payoffEvalDate();
+  return state.payoffLegs.reduce((sum, leg) => sum + legPnlAt(leg, S, evalDate), 0);
+}
+
+function findBreakevens(legs, lo, hi, steps=2000){
+  if(legs.length === 0) return [];
+  const xs = [], ys = [];
+  for(let i=0;i<=steps;i++){
+    const S = lo + (hi-lo)*i/steps;
+    xs.push(S); ys.push(combinedPnlAt(S));
+  }
+  const bes = [];
+  for(let i=1;i<=steps;i++){
+    const y0=ys[i-1], y1=ys[i];
+    if(y0===0){ bes.push(xs[i-1]); continue; }
+    if((y0<0 && y1>0) || (y0>0 && y1<0)){
+      const t = y0/(y0-y1);
+      bes.push(xs[i-1] + (xs[i]-xs[i-1])*t);
+    }
+  }
+  // dedupe near-identical crossings
+  const out = [];
+  bes.sort((a,b)=>a-b).forEach(b=>{ if(out.length===0 || Math.abs(b-out[out.length-1]) > (hi-lo)*0.002) out.push(b); });
+  return out;
+}
+
+function renderPayoffLegsList(){
+  const list = document.getElementById('payoffLegsList');
+  if(state.payoffLegs.length === 0){
+    list.innerHTML = `<div class="empty-state" style="padding:30px 12px;"><div class="small">Legs you add will show up here with qty controls.</div></div>`;
+    return;
+  }
+  list.innerHTML = state.payoffLegs.map(leg=>{
+    const side = leg.qty >= 0 ? 'buy' : 'sell';
+    const tag = leg.qty >= 0 ? 'B' : 'S';
+    return `
+    <div class="leg-row ${side}" data-id="${leg.id}">
+      <button class="leg-tag flip" title="Flip side">${tag}</button>
+      <div class="leg-info">
+        <div class="strike-line">${fmtStrike(leg.strike)} ${leg.type.toUpperCase()}</div>
+        <div class="prem-line">
+          @ <input type="number" class="leg-premium" min="0" step="0.5" value="${leg.avgPremium}" title="Entry price — edit to override the price it was auto-filled at">
+          ${leg.manualPremium?'<span class="stale-tag" title="Manually edited entry price">manual</span>':''}
+          · ${leg.expiry||'—'}
+        </div>
+      </div>
+      <div class="leg-qty-wrap">
+        <span class="leg-qty-label">Qty</span>
+        <input type="number" class="leg-qty" min="1" step="1" value="${Math.abs(leg.qty)}">
+      </div>
+      <button class="leg-remove" title="Remove leg">✕</button>
+    </div>`;
+  }).join('');
+  list.querySelectorAll('.leg-row').forEach(row=>{
+    const id = row.dataset.id;
+    row.querySelector('.leg-qty').addEventListener('change', e=>setPayoffLegQty(id, parseFloat(e.target.value)));
+    row.querySelector('.leg-premium').addEventListener('change', e=>setPayoffLegPremium(id, parseFloat(e.target.value)));
+    row.querySelector('.leg-remove').addEventListener('click', ()=>removePayoffLeg(id));
+    row.querySelector('.leg-tag.flip').addEventListener('click', ()=>{
+      const leg = state.payoffLegs.find(l=>l.id===id);
+      if(leg){ leg.qty = -leg.qty; markPayoffDirty(); renderPayoff(); renderTable(); }
+    });
+  });
+}
+
+let payoffCanvasGeom = null; // cached geometry from last draw, used for drag hit-testing
+
+function drawPayoffChart(){
+  const canvas = document.getElementById('payoffCanvas');
+  const scrollBox = document.getElementById('payoffCanvasScroll');
+  const inner = document.getElementById('payoffCanvasInner');
+  const dpr = window.devicePixelRatio || 1;
+  const zoom = Math.max(1, state.payoffZoom || 1);
+  const baseW = scrollBox.clientWidth;
+  const cssW = Math.round(baseW * zoom), cssH = scrollBox.clientHeight;
+  inner.style.width = cssW + 'px';
+  canvas.width = cssW * dpr; canvas.height = cssH * dpr;
+  canvas.style.width = cssW+'px'; canvas.style.height = cssH+'px';
+  const ctx = canvas.getContext('2d');
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  ctx.clearRect(0,0,cssW,cssH);
+
+  const emptyMsg = document.getElementById('payoffEmptyMsg');
+  if(state.payoffLegs.length === 0){
+    emptyMsg.style.display = 'flex';
+    payoffCanvasGeom = null;
+    return;
+  }
+  emptyMsg.style.display = 'none';
+
+  const liveSpot = state.spot;
+  const displaySpot = state.payoffSpotOverride != null ? state.payoffSpotOverride : liveSpot;
+  const evalDate = payoffEvalDate();
+  const multiExpiry = new Set(state.payoffLegs.map(l=>l.expiry)).size > 1;
+
+  const strikes = state.payoffLegs.map(l=>l.strike);
+  const strikeLo = Math.min(...strikes), strikeHi = Math.max(...strikes);
+  const span = Math.max(strikeHi - strikeLo, (displaySpot||strikeHi)*0.06, 100);
+  let lo = Math.min(strikeLo, displaySpot||strikeLo) - span*0.55;
+  let hi = Math.max(strikeHi, displaySpot||strikeHi) + span*0.55;
+  lo = Math.max(0, lo);
+
+  const N = 240;
+  const xs = [], ys = [];
+  for(let i=0;i<=N;i++){
+    const S = lo + (hi-lo)*i/N;
+    xs.push(S); ys.push(combinedPnlAt(S));
+  }
+  let yMin = Math.min(...ys, 0), yMax = Math.max(...ys, 0);
+  const yPad = Math.max((yMax-yMin)*0.12, 1);
+  yMin -= yPad; yMax += yPad;
+
+  const padL = 58, padR = 16, padT = multiExpiry ? 26 : 14, padB = 30;
+  const plotW = cssW - padL - padR, plotH = cssH - padT - padB;
+  const xToPx = S => padL + (S-lo)/(hi-lo)*plotW;
+  const yToPx = v => padT + (1 - (v-yMin)/(yMax-yMin))*plotH;
+
+  const cssVar = name => getComputedStyle(document.body).getPropertyValue(name).trim();
+  const cText = cssVar('--text'), cMuted = cssVar('--muted'), cBorder = cssVar('--border-soft');
+  const cCall = cssVar('--call'), cPut = cssVar('--put'), cAtm = cssVar('--atm'), cAccent = cssVar('--accent');
+
+  // gridlines + y-axis labels
+  ctx.strokeStyle = cBorder; ctx.lineWidth = 1; ctx.font = '10px ' + cssVar('--mono');
+  ctx.fillStyle = cMuted; ctx.textBaseline = 'middle';
+  const yTicks = 5;
+  for(let i=0;i<=yTicks;i++){
+    const v = yMin + (yMax-yMin)*i/yTicks;
+    const py = yToPx(v);
+    ctx.beginPath(); ctx.moveTo(padL, py); ctx.lineTo(cssW-padR, py); ctx.stroke();
+    ctx.textAlign = 'right';
+    ctx.fillText(fmt(v,0), padL-8, py);
+  }
+  // x-axis strike labels
+  ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+  const xTicks = 5;
+  for(let i=0;i<=xTicks;i++){
+    const S = lo + (hi-lo)*i/xTicks;
+    ctx.fillText(fmtStrike(S), xToPx(S), cssH-padB+8);
+  }
+
+  // zero line
+  ctx.strokeStyle = cMuted; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(padL, yToPx(0)); ctx.lineTo(cssW-padR, yToPx(0)); ctx.stroke();
+
+  // filled profit/loss areas
+  ctx.beginPath();
+  xs.forEach((S,i)=>{ const px=xToPx(S), py=yToPx(ys[i]); if(i===0) ctx.moveTo(px,py); else ctx.lineTo(px,py); });
+  ctx.lineTo(xToPx(xs[xs.length-1]), yToPx(0));
+  ctx.lineTo(xToPx(xs[0]), yToPx(0));
+  ctx.closePath();
+  const grad = ctx.createLinearGradient(0, yToPx(yMax), 0, yToPx(yMin));
+  grad.addColorStop(0, cCall+'33'); grad.addColorStop(0.5, cCall+'08'); grad.addColorStop(0.5, cPut+'08'); grad.addColorStop(1, cPut+'33');
+  ctx.fillStyle = grad; ctx.fill();
+
+  // payoff curve line
+  ctx.beginPath();
+  xs.forEach((S,i)=>{ const px=xToPx(S), py=yToPx(ys[i]); if(i===0) ctx.moveTo(px,py); else ctx.lineTo(px,py); });
+  ctx.strokeStyle = cAccent; ctx.lineWidth = 2.25; ctx.lineJoin='round'; ctx.stroke();
+
+  // breakeven markers
+  const bes = findBreakevens(state.payoffLegs, lo, hi);
+  ctx.font = '10px ' + cssVar('--mono');
+  bes.forEach(be=>{
+    const px = xToPx(be);
+    ctx.strokeStyle = cMuted; ctx.setLineDash([3,3]); ctx.lineWidth=1;
+    ctx.beginPath(); ctx.moveTo(px, padT); ctx.lineTo(px, cssH-padB); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = cText; ctx.textAlign='center'; ctx.textBaseline='bottom';
+    ctx.fillText(fmtStrike(be), px, padT+12);
+  });
+
+  // strike ticks for each leg (small marks on x-axis)
+  state.payoffLegs.forEach(leg=>{
+    const px = xToPx(leg.strike);
+    ctx.fillStyle = leg.qty>=0 ? cCall : cPut;
+    ctx.beginPath(); ctx.arc(px, yToPx(0), 2.5, 0, Math.PI*2); ctx.fill();
+  });
+
+  // spot marker (draggable) — amber vertical line + handle
+  if(displaySpot != null && displaySpot >= lo && displaySpot <= hi){
+    const px = xToPx(displaySpot);
+    ctx.strokeStyle = cAtm; ctx.lineWidth = 1.5; ctx.setLineDash([]);
+    ctx.beginPath(); ctx.moveTo(px, padT); ctx.lineTo(px, cssH-padB); ctx.stroke();
+    // handle knob at top
+    ctx.fillStyle = cAtm;
+    ctx.beginPath(); ctx.arc(px, padT+2, 5, 0, Math.PI*2); ctx.fill();
+    // dot on the curve at current spot P&L
+    const pnlHere = combinedPnlAt(displaySpot);
+    const py = yToPx(pnlHere);
+    ctx.strokeStyle = cAtm; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(px, py, 4.5, 0, Math.PI*2); ctx.stroke();
+    ctx.fillStyle = cssVar('--surface'); ctx.fill();
+
+    ctx.fillStyle = cAtm; ctx.textAlign='center'; ctx.textBaseline='bottom';
+    ctx.fillText(fmtStrike(displaySpot), px, cssH-padB-6);
+  }
+
+  // for calendar/diagonal (multi-expiry) positions, make clear this curve
+  // is priced as of the NEAR leg's expiry — not final settlement — since
+  // the far leg still carries time value on that date.
+  if(multiExpiry && evalDate){
+    ctx.fillStyle = cMuted; ctx.font = '10.5px ' + cssVar('--mono');
+    ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+    ctx.fillText(`Payoff as of ${evalDate} (near leg expiry) · far leg priced via Black-Scholes on live IV`, padL, 0);
+  }
+
+  payoffCanvasGeom = { padL, padR, padT, padB, plotW, plotH, lo, hi, xToPx, pxToX: px => lo + (px-padL)/plotW*(hi-lo) };
+}
+
+function updatePayoffStats(){
+  const legs = state.payoffLegs;
+  const hasLegs = legs.length > 0;
+  // net premium = cash paid(-)/received(+): long legs pay premium, short legs receive it
+  const netPremium = legs.reduce((s,l)=> s - l.avgPremium * l.qty * legLotUnitSize(l), 0);
+  document.getElementById('pNetPremium').textContent = hasLegs ? fmt(netPremium,2) : '—';
+
+  if(!hasLegs){
+    document.getElementById('pMaxProfit').textContent = '—';
+    document.getElementById('pMaxLoss').textContent = '—';
+    document.getElementById('pBreakeven').textContent = '—';
+    document.getElementById('pAtSpot').textContent = '—';
+    updateLiveBanner(false);
+    return;
+  }
+
+  const strikes = legs.map(l=>l.strike);
+  const lo = Math.max(0, Math.min(...strikes) * 0.5);
+  const hi = Math.max(...strikes) * 1.5 + 1000;
+  const N = 3000;
+  let maxP = -Infinity, minP = Infinity;
+  for(let i=0;i<=N;i++){
+    const S = lo + (hi-lo)*i/N;
+    const v = combinedPnlAt(S);
+    if(v>maxP) maxP=v;
+    if(v<minP) minP=v;
+  }
+  // unbounded side detection: net long calls => profit unbounded upward;
+  // net short calls => loss unbounded upward. qty is already signed, so
+  // this is just a straight sum, no side lookup needed.
+  const netCallQty = legs.filter(l=>l.type==='call').reduce((s,l)=>s+l.qty,0);
+  const profitUnbounded = netCallQty > 0;
+  const lossUnbounded = netCallQty < 0;
+
+  document.getElementById('pMaxProfit').textContent = profitUnbounded ? 'Unlimited' : fmt(maxP,2);
+  document.getElementById('pMaxLoss').textContent = lossUnbounded ? 'Unlimited' : fmt(minP,2);
+
+  const bes = findBreakevens(legs, lo, hi);
+  document.getElementById('pBreakeven').textContent = bes.length ? bes.map(b=>fmtStrike(b)).join(' / ') : 'None';
+
+  const displaySpot = state.payoffSpotOverride != null ? state.payoffSpotOverride : state.spot;
+  const atSpotEl = document.getElementById('pAtSpot');
+  if(displaySpot != null){
+    const v = combinedPnlAt(displaySpot);
+    atSpotEl.textContent = fmt(v,2);
+    atSpotEl.className = 'pstat-val ' + (v>0?'call':v<0?'put':'');
+  } else {
+    atSpotEl.textContent = '—';
+  }
+  updateLiveBanner(hasLegs);
+}
+
+// Prominent Sensibull-style banner: big live underlying price + live P&L,
+// updates on every tick when following the live spot, or shows the dragged
+// "what-if" price when the user has pulled the marker off the live spot.
+function updateLiveBanner(hasLegs){
+  const spotEl = document.getElementById('plbSpot');
+  const pnlLiveEl = document.getElementById('plbPnlLive');
+  const pnlExpiryEl = document.getElementById('plbPnlExpiry');
+  const dotEl = document.getElementById('plbDot');
+  const labelEl = document.getElementById('plbLabel');
+  if(!spotEl) return;
+
+  const isDragged = state.payoffSpotOverride != null;
+  const displaySpot = isDragged ? state.payoffSpotOverride : state.spot;
+
+  spotEl.textContent = displaySpot != null ? (state.underlying + ' $' + fmt(displaySpot,2)) : '—';
+
+  dotEl.classList.toggle('paused', isDragged);
+  if(isDragged){
+    labelEl.textContent = 'WHAT-IF (tap to go live)';
+    labelEl.classList.add('paused-label');
+  } else {
+    labelEl.textContent = 'LIVE';
+    labelEl.classList.remove('paused-label');
+  }
+
+  // "Expiry P&L" follows the dragged/live spot — it's the what-if curve.
+  if(!hasLegs || displaySpot == null){
+    pnlExpiryEl.textContent = '—';
+    pnlExpiryEl.className = 'plb-pnl small';
+  } else {
+    const v = combinedPnlAt(displaySpot);
+    pnlExpiryEl.textContent = (v>0?'+':'') + fmt(v,2);
+    pnlExpiryEl.className = 'plb-pnl small ' + (v>0?'call':v<0?'put':'');
+  }
+
+  // "Live P&L (close now)" ALWAYS uses the real current bid/ask — it's what
+  // a Market order would actually fill at right now, so it ignores the
+  // dragged what-if marker entirely (that marker only simulates the
+  // underlying moving, not the order book).
+  if(!hasLegs){
+    pnlLiveEl.textContent = '—';
+    pnlLiveEl.className = 'plb-pnl';
+  } else {
+    const { pnl, allBook } = liveCloseNowPnl(state.payoffLegs);
+    if(pnl == null){
+      pnlLiveEl.textContent = '—';
+      pnlLiveEl.className = 'plb-pnl';
+    } else {
+      pnlLiveEl.textContent = (pnl>0?'+':'') + fmt(pnl,2) + (allBook?'':' *');
+      pnlLiveEl.className = 'plb-pnl ' + (pnl>0?'call':pnl<0?'put':'');
+      pnlLiveEl.title = allBook ? 'Priced off live bid/ask' : '* some legs priced off last known LTP — live bid/ask unavailable for them right now';
+    }
+  }
+}
+
+document.getElementById('plbLabel').addEventListener('click', ()=>{
+  if(state.payoffSpotOverride != null){
+    state.payoffSpotOverride = null;
+    drawPayoffChart();
+    updatePayoffStats();
+  }
+});
+
+function renderPayoff(){
+  renderPortfolioSelect();
+  renderPayoffLegsList();
+  drawPayoffChart();
+  updatePayoffStats();
+  renderPortfolio();
+  updateSaveButtonState();
+  updatePayoffNavBadge();
+}
+
+// current live LTP for a leg's contract, pulled straight from the chain feed.
+// Falls back to the leg's own last cached mark if the contract isn't in the
+// live feed right now (wrong underlying tab selected, or expiry rolled off
+// the chain) — so P&L keeps showing a value instead of going blank forever.
+function currentLtpFor(leg){
+  const legU = leg.underlying || state.underlying;
+  if(legU === state.underlying){
+    const row = state.raw.find(r=>r.strike===leg.strike && r.expiry===leg.expiry && r.contract_type===(leg.type==='call'?'call_options':'put_options'));
+    if(row){
+      const live = row.ltp ?? row.mark ?? ((row.bid!=null&&row.ask!=null)?(row.bid+row.ask)/2:null);
+      if(live != null){ leg.lastKnownLtp = live; return live; }
+    }
+  }
+  return leg.lastKnownLtp ?? null;
+}
+
+// The price you'd ACTUALLY get right now with a Market order to close this
+// leg — not the mid/LTP. Squaring off always crosses the spread against you:
+//   long (qty>0)  -> you SELL to close -> you receive the bid
+//   short (qty<0) -> you BUY to close  -> you pay the ask
+// Falls back to LTP/mark if the live order book isn't available (better than
+// nothing, but note this is an approximation, not the executable price).
+function currentExitPriceFor(leg){
+  const legU = leg.underlying || state.underlying;
+  if(legU === state.underlying){
+    const row = state.raw.find(r=>r.strike===leg.strike && r.expiry===leg.expiry && r.contract_type===(leg.type==='call'?'call_options':'put_options'));
+    if(row){
+      const bookPrice = leg.qty >= 0 ? row.bid : row.ask;
+      if(bookPrice != null){ leg.lastKnownExitPrice = bookPrice; return { price: bookPrice, isBook: true }; }
+      const fallback = row.ltp ?? row.mark ?? null;
+      if(fallback != null){ leg.lastKnownExitPrice = fallback; return { price: fallback, isBook: false }; }
+    }
+  }
+  return leg.lastKnownExitPrice != null ? { price: leg.lastKnownExitPrice, isBook: false } : { price: null, isBook: false };
+}
+
+// Live "close everything right now" P&L across the whole draft/portfolio,
+// using real bid (for longs) / ask (for shorts) — this is what you'd
+// actually walk away with via Market orders, spread cost included.
+// Returns { pnl, allBook } — allBook is false if any leg had to fall back
+// to LTP/mark because the order book side wasn't available.
+function liveCloseNowPnl(legs){
+  let pnl = 0, allBook = true, any = false;
+  legs.forEach(leg=>{
+    const {price, isBook} = currentExitPriceFor(leg);
+    if(price == null) return;
+    any = true;
+    if(!isBook) allBook = false;
+    pnl += (price - leg.avgPremium) * leg.qty * legLotUnitSize(leg);
+  });
+  return { pnl: any ? pnl : null, allBook };
+}
+
+function renderPortfolio(){
+  const body = document.getElementById('portfolioBody');
+  const legs = state.payoffLegs;
+  if(legs.length === 0){
+    body.innerHTML = `<tr><td colspan="8"><div class="empty-state" style="padding:24px;"><div class="small">No open positions</div></div></td></tr>`;
+    document.getElementById('portfolioTotalPnl').textContent = '—';
+    document.getElementById('portfolioTotalPnlPct').textContent = '—';
+    return;
+  }
+
+  let totalPnl = 0, totalCost = 0;
+  body.innerHTML = legs.map(leg=>{
+    const legU = leg.underlying || state.underlying;
+    const isLive = legU === state.underlying && state.raw.some(r=>r.strike===leg.strike && r.expiry===leg.expiry && r.contract_type===(leg.type==='call'?'call_options':'put_options'));
+    const { price: exitPrice, isBook } = currentExitPriceFor(leg);
+    // mark-to-market at the price you'd ACTUALLY exit at (bid for longs,
+    // ask for shorts) — not the mid/LTP, so this matches what a Market
+    // order to close would really realize, spread cost included
+    const unitSize = legLotUnitSize(leg);
+    const pnl = exitPrice != null ? (exitPrice - leg.avgPremium) * leg.qty * unitSize : null;
+    const cost = Math.abs(leg.qty) * leg.avgPremium * unitSize;
+    totalCost += cost;
+    if(pnl != null) totalPnl += pnl;
+    const pnlPct = (pnl != null && cost > 0) ? (pnl/cost*100) : null;
+    const side = leg.qty >= 0 ? 'buy' : 'sell';
+    const pnlClass = pnl == null ? '' : (pnl >= 0 ? 'pnl-pos' : 'pnl-neg');
+    const staleTag = (!isLive && exitPrice!=null) ? ` <span class="stale-tag" title="${legU!==state.underlying ? 'Switch to '+legU+' to get a live price' : 'Not in the current chain — showing last known price'}">stale</span>` : (isLive && !isBook ? ` <span class="stale-tag" title="Order book side unavailable — showing LTP/mark instead of bid/ask">≈</span>` : '');
+    return `<tr>
+      <td style="text-align:left"><span class="side-chip ${side}">${side}</span></td>
+      <td style="text-align:left">${fmtStrike(leg.strike)} ${leg.type.toUpperCase()}${legU!==state.underlying?` <span class="und-tag">${legU}</span>`:''}</td>
+      <td>${leg.expiry||'—'}</td>
+      <td class="${side==='buy'?'pnl-pos':'pnl-neg'}">${side==='sell'?'-':''}${Math.abs(leg.qty)}</td>
+      <td>${fmt(leg.avgPremium,2)}</td>
+      <td>${exitPrice!=null?fmt(exitPrice,2):'—'}${staleTag}</td>
+      <td class="${pnlClass}">${pnl!=null?fmt(pnl,2):'—'}</td>
+      <td class="${pnlClass}">${pnlPct!=null?fmt(pnlPct,1)+'%':'—'}</td>
+    </tr>`;
+  }).join('');
+
+  const totalPnlEl = document.getElementById('portfolioTotalPnl');
+  const totalPnlPctEl = document.getElementById('portfolioTotalPnlPct');
+  totalPnlEl.textContent = fmt(totalPnl,2);
+  totalPnlEl.className = totalPnl>=0?'pnl-pos':'pnl-neg';
+  const totalPct = totalCost>0 ? (totalPnl/totalCost*100) : 0;
+  totalPnlPctEl.textContent = fmt(totalPct,1)+'%';
+  totalPnlPctEl.className = totalPnl>=0?'pnl-pos':'pnl-neg';
+}
+
+// ---- drag interaction on the payoff canvas: move the spot marker ----
+(function initPayoffDrag(){
+  const canvas = document.getElementById('payoffCanvas');
+  let dragging = false;
+
+  function xFromEvent(e){
+    const rect = canvas.getBoundingClientRect();
+    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+    return clientX - rect.left;
+  }
+
+  function handleMove(e){
+    if(!dragging || !payoffCanvasGeom) return;
+    const px = xFromEvent(e);
+    let S = payoffCanvasGeom.pxToX(px);
+    S = Math.max(payoffCanvasGeom.lo, Math.min(payoffCanvasGeom.hi, S));
+    state.payoffSpotOverride = S;
+    drawPayoffChart();
+    updatePayoffStats();
+    e.preventDefault();
+  }
+
+  function startDrag(e){
+    if(!payoffCanvasGeom) return;
+    dragging = true;
+    canvas.classList.add('dragging');
+    handleMove(e);
+  }
+  function endDrag(){
+    if(dragging){ dragging = false; canvas.classList.remove('dragging'); }
+  }
+
+  canvas.addEventListener('mousedown', startDrag);
+  window.addEventListener('mousemove', handleMove);
+  window.addEventListener('mouseup', endDrag);
+  canvas.addEventListener('touchstart', startDrag, {passive:false});
+  window.addEventListener('touchmove', handleMove, {passive:false});
+  window.addEventListener('touchend', endDrag);
+
+  // double-click resets the marker back to following the live spot price
+  canvas.addEventListener('dblclick', ()=>{
+    state.payoffSpotOverride = null;
+    drawPayoffChart();
+    updatePayoffStats();
+  });
+})();
+
+window.addEventListener('resize', ()=>{
+  if(state.view === 'payoff') drawPayoffChart();
+  if(state.view === 'analytics') { drawSkewChart(); }
+});
+
+// ---- payoff chart zoom (buttons, mouse wheel, pinch) ----
+(function initPayoffZoom(){
+  const scrollBox = document.getElementById('payoffCanvasScroll');
+  const MAX_ZOOM = 6, MIN_ZOOM = 1, STEP = 1.4;
+
+  function setZoom(newZoom, anchorClientX){
+    const oldZoom = state.payoffZoom || 1;
+    newZoom = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, newZoom));
+    if(newZoom === oldZoom) return;
+    // keep whatever strike is currently under the anchor point stable while
+    // zooming, instead of always snapping back to the left edge
+    const rect = scrollBox.getBoundingClientRect();
+    const anchorX = anchorClientX != null ? anchorClientX - rect.left : rect.width/2;
+    const scrollLeftBefore = scrollBox.scrollLeft;
+    const contentX = scrollLeftBefore + anchorX;
+    const ratio = contentX / (rect.width * oldZoom);
+    state.payoffZoom = newZoom;
+    drawPayoffChart();
+    updatePayoffStats();
+    scrollBox.scrollLeft = ratio * rect.width * newZoom - anchorX;
+  }
+
+  document.getElementById('payoffZoomIn').addEventListener('click', ()=> setZoom((state.payoffZoom||1) * STEP));
+  document.getElementById('payoffZoomOut').addEventListener('click', ()=> setZoom((state.payoffZoom||1) / STEP));
+  document.getElementById('payoffZoomReset').addEventListener('click', ()=>{
+    state.payoffZoom = 1;
+    scrollBox.scrollLeft = 0;
+    drawPayoffChart();
+    updatePayoffStats();
+  });
+
+  // ctrl/cmd + wheel, or trackpad pinch (which browsers report as a wheel
+  // event with ctrlKey set) to zoom; plain wheel/trackpad scroll just pans
+  // via the container's native overflow-x scroll, so nothing extra needed there.
+  scrollBox.addEventListener('wheel', (e)=>{
+    if(!e.ctrlKey && !e.metaKey) return; // let plain scroll pan normally
+    e.preventDefault();
+    const factor = Math.exp(-e.deltaY * 0.01);
+    setZoom((state.payoffZoom||1) * factor, e.clientX);
+  }, {passive:false});
+
+  // basic two-finger pinch support on touch devices
+  let pinchStartDist = null, pinchStartZoom = 1;
+  scrollBox.addEventListener('touchstart', (e)=>{
+    if(e.touches.length === 2){
+      const [a,b] = e.touches;
+      pinchStartDist = Math.hypot(a.clientX-b.clientX, a.clientY-b.clientY);
+      pinchStartZoom = state.payoffZoom || 1;
+    }
+  }, {passive:true});
+  scrollBox.addEventListener('touchmove', (e)=>{
+    if(e.touches.length === 2 && pinchStartDist){
+      const [a,b] = e.touches;
+      const dist = Math.hypot(a.clientX-b.clientX, a.clientY-b.clientY);
+      const midX = (a.clientX+b.clientX)/2;
+      setZoom(pinchStartZoom * (dist/pinchStartDist), midX);
+      e.preventDefault();
+    }
+  }, {passive:false});
+  scrollBox.addEventListener('touchend', ()=>{ pinchStartDist = null; });
+})();
+
+// ================= ANALYTICS: IV Skew + OI Heatmap =================
+
+document.querySelectorAll('#analyticsToggle button').forEach(b=>{
+  b.addEventListener('click', ()=>{
+    document.querySelectorAll('#analyticsToggle button').forEach(x=>x.classList.toggle('active', x===b));
+    const tab = b.dataset.atab;
+    document.getElementById('panelSkew').style.display = tab==='skew' ? 'block' : 'none';
+    document.getElementById('panelOi').style.display = tab==='oi' ? 'block' : 'none';
+    if(tab==='skew') drawSkewChart();
+    if(tab==='oi') renderOiHeatmap();
+  });
+});
+
+document.getElementById('analyticsExpirySelect').addEventListener('change', e=>{
+  setActiveExpiry(e.target.value);
+});
+
+function renderAnalytics(){
+  const activeTab = document.querySelector('#analyticsToggle button.active')?.dataset.atab || 'skew';
+  if(activeTab === 'skew') drawSkewChart();
+  else renderOiHeatmap();
+}
+
+function currentExpiryRows(){
+  return state.raw.filter(r=>r.expiry === state.activeExpiry);
+}
+
+// ---- IV Skew chart ----
+function drawSkewChart(){
+  const canvas = document.getElementById('skewCanvas');
+  if(!canvas) return;
+  const wrap = canvas.parentElement;
+  const dpr = window.devicePixelRatio || 1;
+  const cssW = wrap.clientWidth, cssH = wrap.clientHeight;
+  canvas.width = cssW*dpr; canvas.height = cssH*dpr;
+  canvas.style.width = cssW+'px'; canvas.style.height = cssH+'px';
+  const ctx = canvas.getContext('2d');
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  ctx.clearRect(0,0,cssW,cssH);
+
+  const rows = currentExpiryRows();
+  const calls = rows.filter(r=>r.contract_type==='call_options' && r.iv!=null && r.iv>0).sort((a,b)=>a.strike-b.strike);
+  const puts = rows.filter(r=>r.contract_type==='put_options' && r.iv!=null && r.iv>0).sort((a,b)=>a.strike-b.strike);
+  const emptyMsg = document.getElementById('skewEmptyMsg');
+
+  if(calls.length===0 && puts.length===0){
+    emptyMsg.style.display='flex';
+    updateSkewStats(null,null,null);
+    return;
+  }
+  emptyMsg.style.display='none';
+
+  const allStrikes = [...new Set([...calls.map(r=>r.strike), ...puts.map(r=>r.strike)])];
+  const strikeLo = Math.min(...allStrikes), strikeHi = Math.max(...allStrikes);
+  const allIv = [...calls.map(r=>r.iv), ...puts.map(r=>r.iv)];
+  let ivLo = Math.min(...allIv), ivHi = Math.max(...allIv);
+  const ivPad = Math.max((ivHi-ivLo)*0.15, 1);
+  ivLo = Math.max(0, ivLo-ivPad); ivHi += ivPad;
+
+  const padL=48, padR=16, padT=14, padB=30;
+  const plotW=cssW-padL-padR, plotH=cssH-padT-padB;
+  const xToPx = S => padL + (S-strikeLo)/(strikeHi-strikeLo||1)*plotW;
+  const yToPx = v => padT + (1-(v-ivLo)/(ivHi-ivLo||1))*plotH;
+
+  const cssVar = n => getComputedStyle(document.body).getPropertyValue(n).trim();
+  const cMuted=cssVar('--muted'), cBorder=cssVar('--border-soft'), cCall=cssVar('--call'), cPut=cssVar('--put'), cAtm=cssVar('--atm'), cText=cssVar('--text');
+
+  // gridlines
+  ctx.strokeStyle=cBorder; ctx.lineWidth=1; ctx.font='10px '+cssVar('--mono'); ctx.fillStyle=cMuted;
+  ctx.textAlign='right'; ctx.textBaseline='middle';
+  for(let i=0;i<=4;i++){
+    const v = ivLo+(ivHi-ivLo)*i/4;
+    const py = yToPx(v);
+    ctx.beginPath(); ctx.moveTo(padL,py); ctx.lineTo(cssW-padR,py); ctx.stroke();
+    ctx.fillText(fmt(v,1)+'%', padL-8, py);
+  }
+  ctx.textAlign='center'; ctx.textBaseline='top';
+  for(let i=0;i<=4;i++){
+    const S = strikeLo+(strikeHi-strikeLo)*i/4;
+    ctx.fillText(fmtStrike(S), xToPx(S), cssH-padB+8);
+  }
+
+  // spot marker
+  if(state.spot != null && state.spot>=strikeLo && state.spot<=strikeHi){
+    const px = xToPx(state.spot);
+    ctx.strokeStyle=cAtm; ctx.setLineDash([4,3]); ctx.lineWidth=1.25;
+    ctx.beginPath(); ctx.moveTo(px,padT); ctx.lineTo(px,cssH-padB); ctx.stroke();
+    ctx.setLineDash([]);
+  }
+
+  function drawSeries(pts, color){
+    if(pts.length===0) return;
+    ctx.strokeStyle=color; ctx.lineWidth=2; ctx.beginPath();
+    pts.forEach((r,i)=>{ const px=xToPx(r.strike), py=yToPx(r.iv); if(i===0) ctx.moveTo(px,py); else ctx.lineTo(px,py); });
+    ctx.stroke();
+    ctx.fillStyle=color;
+    pts.forEach(r=>{ ctx.beginPath(); ctx.arc(xToPx(r.strike), yToPx(r.iv), 2.75, 0, Math.PI*2); ctx.fill(); });
+  }
+  drawSeries(calls, cCall);
+  drawSeries(puts, cPut);
+
+  updateSkewStats(calls, puts, {strikeLo,strikeHi});
+}
+
+function updateSkewStats(calls, puts, range){
+  const atmIvEl = document.getElementById('skAtmIv');
+  const callSkewEl = document.getElementById('skCallSkew');
+  const putSkewEl = document.getElementById('skPutSkew');
+  const shapeEl = document.getElementById('skShape');
+  if(!calls || !puts || (calls.length===0 && puts.length===0)){
+    atmIvEl.textContent='—'; callSkewEl.textContent='—'; putSkewEl.textContent='—'; shapeEl.textContent='—';
+    return;
+  }
+  // ATM IV: average of nearest call/put IV to live spot
+  const spot = state.spot;
+  const nearest = arr => spot==null||arr.length===0 ? null : arr.reduce((a,b)=>Math.abs(b.strike-spot)<Math.abs(a.strike-spot)?b:a);
+  const nc = nearest(calls), np = nearest(puts);
+  const atmIv = (nc&&np) ? (nc.iv+np.iv)/2 : (nc?.iv ?? np?.iv ?? null);
+  atmIvEl.textContent = atmIv!=null ? fmt(atmIv,1)+'%' : '—';
+
+  // proxy "25-delta" skew: pick the call/put whose |delta| is closest to 0.25,
+  // fall back to the OTM strike ~10% away from spot if delta isn't available
+  function findByDelta(arr, targetAbsDelta){
+    const withDelta = arr.filter(r=>r.delta!=null);
+    if(withDelta.length===0 || spot==null) return null;
+    return withDelta.reduce((a,b)=>Math.abs(Math.abs(b.delta)-targetAbsDelta)<Math.abs(Math.abs(a.delta)-targetAbsDelta)?b:a);
+  }
+  const c25 = findByDelta(calls, 0.25);
+  const p25 = findByDelta(puts, 0.25);
+  callSkewEl.textContent = (c25 && atmIv!=null) ? (c25.iv-atmIv>=0?'+':'')+fmt(c25.iv-atmIv,1)+'%' : '—';
+  putSkewEl.textContent = (p25 && atmIv!=null) ? (p25.iv-atmIv>=0?'+':'')+fmt(p25.iv-atmIv,1)+'%' : '—';
+
+  // shape: compare average OTM put IV vs average OTM call IV around spot
+  let shape = '—';
+  if(spot!=null){
+    const otmPuts = puts.filter(r=>r.strike<spot);
+    const otmCalls = calls.filter(r=>r.strike>spot);
+    if(otmPuts.length && otmCalls.length){
+      const avgP = otmPuts.reduce((s,r)=>s+r.iv,0)/otmPuts.length;
+      const avgC = otmCalls.reduce((s,r)=>s+r.iv,0)/otmCalls.length;
+      const diff = avgP-avgC;
+      shape = Math.abs(diff)<0.5 ? 'Flat' : (diff>0 ? 'Put skew (fear)' : 'Call skew (greed)');
+    }
+  }
+  shapeEl.textContent = shape;
+}
+
+// ---- OI Heatmap ----
+function renderOiHeatmap(){
+  const body = document.getElementById('oiTableBody');
+  const emptyMsg = document.getElementById('oiEmptyMsg');
+  const rows = currentExpiryRows();
+  const strikes = [...new Set(rows.map(r=>r.strike))].sort((a,b)=>a-b);
+  const hasOi = rows.some(r=>r.oi!=null && r.oi>0);
+
+  if(strikes.length===0 || !hasOi){
+    body.innerHTML='';
+    emptyMsg.style.display='flex';
+    document.getElementById('oiMaxPain').textContent='—';
+    document.getElementById('oiTotalCall').textContent='—';
+    document.getElementById('oiTotalPut').textContent='—';
+    document.getElementById('oiPcr').textContent='—';
+    return;
+  }
+  emptyMsg.style.display='none';
+
+  const byStrike = {};
+  strikes.forEach(s=>{
+    const call = rows.find(r=>r.strike===s && r.contract_type==='call_options');
+    const put = rows.find(r=>r.strike===s && r.contract_type==='put_options');
+    byStrike[s] = { call: call?.oi ?? 0, put: put?.oi ?? 0 };
+  });
+  const maxOi = Math.max(...Object.values(byStrike).map(v=>Math.max(v.call,v.put)), 1);
+
+  // max pain: strike at which total option-writer payout is minimized
+  let maxPainStrike = null, minPayout = Infinity;
+  strikes.forEach(S=>{
+    let payout = 0;
+    strikes.forEach(K=>{
+      payout += Math.max(0, S-K) * (byStrike[K].call||0); // call holders' intrinsic value at expiry S
+      payout += Math.max(0, K-S) * (byStrike[K].put||0);  // put holders' intrinsic value at expiry S
+    });
+    if(payout < minPayout){ minPayout = payout; maxPainStrike = S; }
+  });
+
+  const atmStrike = state.spot!=null ? strikes.reduce((a,b)=>Math.abs(b-state.spot)<Math.abs(a-state.spot)?b:a) : null;
+  let totalCall=0, totalPut=0;
+  body.innerHTML = strikes.map(s=>{
+    const {call,put} = byStrike[s];
+    totalCall+=call; totalPut+=put;
+    const callPct = (call/maxOi*100).toFixed(1);
+    const putPct = (put/maxOi*100).toFixed(1);
+    const rowClasses = [s===maxPainStrike?'oi-maxpain':'', s===atmStrike?'oi-atm':''].filter(Boolean).join(' ');
+    return `<tr class="${rowClasses}">
+      <td>
+        <div class="oi-bar-row call">
+          <span class="oi-bar-val">${fmt(call,0)}</span>
+          <div class="oi-bar-track"><div class="oi-bar-fill call" style="width:${callPct}%"></div></div>
+        </div>
+      </td>
+      <td class="oi-strike">${fmtStrike(s)}${s===maxPainStrike?' <span class="stale-tag" style="color:var(--atm);background:var(--atm-dim);" title="Max Pain">MP</span>':''}</td>
+      <td>
+        <div class="oi-bar-row put">
+          <div class="oi-bar-track"><div class="oi-bar-fill put" style="width:${putPct}%"></div></div>
+          <span class="oi-bar-val">${fmt(put,0)}</span>
+        </div>
+      </td>
+    </tr>`;
+  }).join('');
+
+  document.getElementById('oiMaxPain').textContent = maxPainStrike!=null ? fmtStrike(maxPainStrike) : '—';
+  document.getElementById('oiTotalCall').textContent = fmt(totalCall,0);
+  document.getElementById('oiTotalPut').textContent = fmt(totalPut,0);
+  document.getElementById('oiPcr').textContent = totalCall>0 ? fmt(totalPut/totalCall,2) : '—';
+}
+
+function tick(){
+  if(!state.paused) fetchSnapshot();
+}
+fetchSnapshot();
+state.timer = setInterval(tick, state.resyncMs);
+
+// ==================== ALERTS ENGINE (Telegram + browser) ====================
+// alert.id format: `${builderNum}|${side}|${expiry1}|${expiry2}|${s1}|${s2}`
+function saveAlerts(){
+  localStorage.setItem('doc_alerts', JSON.stringify(state.alerts));
+}
+function saveTelegramConfig(){
+  localStorage.setItem('doc_tg_token', state.tgToken);
+  localStorage.setItem('doc_tg_chatid', state.tgChatId);
+}
+
+async function sendTelegram(text){
+  if(!state.tgToken || !state.tgChatId) return { ok:false, error:'Telegram not configured' };
+  try{
+    const url = `https://api.telegram.org/bot${state.tgToken}/sendMessage`;
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ chat_id: state.tgChatId, text })
+    });
+    const json = await res.json();
+    return json.ok ? { ok:true } : { ok:false, error: json.description || 'Unknown error' };
+  } catch(e){
+    return { ok:false, error: e.message };
+  }
+}
+
+function notifyBrowser(title, body){
+  if(typeof Notification === 'undefined') return;
+  if(Notification.permission === 'granted'){
+    try{ new Notification(title, { body }); } catch(e){}
+  } else if(Notification.permission !== 'denied'){
+    Notification.requestPermission().then(p=>{
+      if(p === 'granted'){ try{ new Notification(title, { body }); }catch(e){} }
+    });
+  }
+}
+
+function fireAlert(alert, value){
+  const opLabel = alert.op === 'gte' ? '≥' : '≤';
+  const s2Label = alert.s2 !== '' ? alert.s2 : '—';
+  const title = `Spread alert #${alert.n}: ${alert.s1}/${s2Label} (${alert.side})`;
+  const body = `${alert.field.toUpperCase()} ${opLabel} ${alert.value} — now ${fmt(value,2)} · ${alert.expiry1}${alert.expiry2 && alert.expiry2!==alert.expiry1 ? ' → '+alert.expiry2 : ''}`;
+  notifyBrowser(title, body);
+  sendTelegram(`🔔 ${title}\n${body}`);
+}
+
+function evaluateAlerts(rowValues, tbody){
+  if(state.alerts.length === 0) return;
+  let changed = false;
+  state.alerts.forEach(alert=>{
+    const vals = rowValues[alert.id];
+    if(!vals) return;
+    const v = vals[alert.field];
+    if(v === null || v === undefined || isNaN(v)) return;
+    const conditionTrue = alert.op === 'gte' ? v >= alert.value : v <= alert.value;
+    const tr = tbody.querySelector(`tr[data-alertid="${alert.id}"]`);
+    if(conditionTrue){
+      if(!alert.fired){
+        fireAlert(alert, v);
+        alert.fired = true;
+        changed = true;
+      }
+      if(tr) tr.classList.add('alert-fired');
+    } else {
+      if(alert.fired){ alert.fired = false; changed = true; } // re-arm once condition clears
+      if(tr) tr.classList.add('alert-armed');
+    }
+  });
+  if(changed) saveAlerts();
+}
+
+// ---- alert popover (per-row set/remove) ----
+let currentAlertId = null;
+function openAlertPopover(alertId){
+  currentAlertId = alertId;
+  const existing = state.alerts.find(a=>a.id===alertId);
+  const [n, side, expiry1, expiry2, s1, s2] = alertId.split('|');
+  document.getElementById('alertPopoverTitle').textContent = `Alert #${n} · ${s1}/${s2||'—'} (${side})`;
+  document.getElementById('alertField').value = existing ? existing.field : 'ltp';
+  document.getElementById('alertOp').value = existing ? existing.op : 'gte';
+  document.getElementById('alertValue').value = existing ? existing.value : '';
+  document.getElementById('alertRemoveBtn').style.display = existing ? 'block' : 'none';
+  document.getElementById('alertPopoverOverlay').classList.add('open');
+}
+function closeAlertPopover(){
+  document.getElementById('alertPopoverOverlay').classList.remove('open');
+  currentAlertId = null;
+}
+document.getElementById('alertCancelBtn').addEventListener('click', closeAlertPopover);
+document.getElementById('alertPopoverOverlay').addEventListener('click', (e)=>{
+  if(e.target.id === 'alertPopoverOverlay') closeAlertPopover();
+});
+document.getElementById('alertSaveBtn').addEventListener('click', ()=>{
+  const value = parseFloat(document.getElementById('alertValue').value);
+  if(isNaN(value)){ alert('Enter a numeric value'); return; }
+  const field = document.getElementById('alertField').value;
+  const op = document.getElementById('alertOp').value;
+  const [n, side, expiry1, expiry2, s1, s2] = currentAlertId.split('|');
+  const idx = state.alerts.findIndex(a=>a.id===currentAlertId);
+  const entry = { id: currentAlertId, n, side, expiry1, expiry2, s1, s2, field, op, value, fired:false };
+  if(idx >= 0) state.alerts[idx] = { ...state.alerts[idx], field, op, value }; else state.alerts.push(entry);
+  saveAlerts();
+  closeAlertPopover();
+  renderSpreads();
+  if(typeof Notification !== 'undefined' && Notification.permission === 'default') Notification.requestPermission();
+});
+document.getElementById('alertRemoveBtn').addEventListener('click', ()=>{
+  state.alerts = state.alerts.filter(a=>a.id!==currentAlertId);
+  saveAlerts();
+  closeAlertPopover();
+  renderSpreads();
+});
+
+// ---- telegram + active-alerts settings modal ----
+function renderActiveAlertsList(){
+  const box = document.getElementById('activeAlertsList');
+  if(state.alerts.length === 0){ box.innerHTML = ''; return; }
+  box.innerHTML = '<label>Active alerts</label>' + state.alerts.map(a=>
+    `<div class="alert-list-item"><span>#${a.n} ${a.s1}/${a.s2||'—'} (${a.side}) · ${a.field.toUpperCase()} ${a.op==='gte'?'≥':'≤'} ${a.value}</span><span class="rm" data-id="${a.id}">✕</span></div>`
+  ).join('');
+  box.querySelectorAll('.rm').forEach(el=>{
+    el.addEventListener('click', ()=>{
+      state.alerts = state.alerts.filter(a=>a.id!==el.dataset.id);
+      saveAlerts();
+      renderActiveAlertsList();
+      renderSpreads();
+    });
+  });
+}
+document.getElementById('alertSettingsBtn').addEventListener('click', ()=>{
+  document.getElementById('tgToken').value = state.tgToken;
+  document.getElementById('tgChatId').value = state.tgChatId;
+  renderActiveAlertsList();
+  document.getElementById('settingsOverlay').classList.add('open');
+});
+document.getElementById('settingsCloseBtn').addEventListener('click', ()=>{
+  document.getElementById('settingsOverlay').classList.remove('open');
+});
+document.getElementById('settingsOverlay').addEventListener('click', (e)=>{
+  if(e.target.id === 'settingsOverlay') document.getElementById('settingsOverlay').classList.remove('open');
+});
+document.getElementById('settingsSaveBtn').addEventListener('click', ()=>{
+  state.tgToken = document.getElementById('tgToken').value.trim();
+  state.tgChatId = document.getElementById('tgChatId').value.trim();
+  saveTelegramConfig();
+  document.getElementById('settingsOverlay').classList.remove('open');
+});
+document.getElementById('tgTestBtn').addEventListener('click', async ()=>{
+  state.tgToken = document.getElementById('tgToken').value.trim();
+  state.tgChatId = document.getElementById('tgChatId').value.trim();
+  saveTelegramConfig();
+  const btn = document.getElementById('tgTestBtn');
+  const original = btn.textContent;
+  btn.textContent = 'Sending…';
+  const res = await sendTelegram('✅ Test message from ODD dashboard.');
+  btn.textContent = res.ok ? 'Sent ✓' : `Failed: ${res.error}`;
+  setTimeout(()=>{ btn.textContent = original; }, 2500);
+});
+</script>
+</body>
+</html>
