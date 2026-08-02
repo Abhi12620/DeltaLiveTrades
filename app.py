@@ -32,6 +32,7 @@ _settings_lock = threading.Lock()
 _DEFAULT_SETTINGS = {
     "max_lot_size": int(os.environ.get("MAX_LOT_SIZE", "500")),
     "depth_band_pct": float(os.environ.get("DEPTH_BAND_PCT", "1.0")),  # stored as a PERCENT (e.g. 1.0 = 1%)
+    "inter_leg_delay_ms": int(os.environ.get("INTER_LEG_DELAY_MS", "0")),  # deliberate pause AFTER the buy leg confirms, BEFORE the sell leg fires (0 = fire as soon as ready)
 }
 
 
@@ -313,6 +314,14 @@ def settings_endpoint():
             current["depth_band_pct"] = v
         except (ValueError, TypeError):
             return jsonify({"ok": False, "error": "depth_band_pct must be a positive number"}), 400
+    if "inter_leg_delay_ms" in data:
+        try:
+            v = int(data["inter_leg_delay_ms"])
+            if v < 0:
+                raise ValueError()
+            current["inter_leg_delay_ms"] = v
+        except (ValueError, TypeError):
+            return jsonify({"ok": False, "error": "inter_leg_delay_ms must be a non-negative integer"}), 400
     save_settings(current)
     audit("settings_updated", settings=current)
     return jsonify({"ok": True, "settings": current})
@@ -520,6 +529,13 @@ def place_spread():
     # actually filled (handles partial fills cleanly, keeps the ratio intact)
     fill_fraction = buy_result["filled_size"] / buy_leg["size"]
     sell_size = max(1, round(sell_leg["size"] * fill_fraction))
+
+    # optional deliberate pause between legs, entirely user-controlled via
+    # the Trade Params panel (0 = fire the sell leg immediately, default)
+    inter_leg_delay_ms = settings.get("inter_leg_delay_ms", 0)
+    if inter_leg_delay_ms > 0:
+        audit("inter_leg_delay", delay_ms=inter_leg_delay_ms)
+        time.sleep(inter_leg_delay_ms / 1000.0)
 
     # ---- leg 2: SELL fires SECOND, with retries (margin-gated side) ----
     sell_result = None

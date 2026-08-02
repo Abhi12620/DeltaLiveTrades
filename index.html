@@ -497,7 +497,7 @@
 </div>
 <script>
 (function(){
-  var AUTH_ID = 'AbhishekGol';
+  var AUTH_ID = 'AbhishekGOl';
   var AUTH_PASS = 'Abhi@242897D';
   var gate = document.getElementById('loginGate');
   if(sessionStorage.getItem('odd_auth') === 'true'){ gate.classList.add('hidden'); return; }
@@ -962,6 +962,10 @@
     <input type="number" id="tpDepthBandPct" min="0.1" step="0.1">
     <p class="note" style="margin:2px 0 8px;">How far from the best price the orderbook depth precheck looks, before either leg is placed.</p>
 
+    <label>Gap between BUY confirming and SELL firing (ms)</label>
+    <input type="number" id="tpInterLegDelay" min="0" step="50">
+    <p class="note" style="margin:2px 0 8px;">0 = fire the sell leg immediately once the buy leg confirms (fastest, smallest market-move window). Raise this only if you deliberately want a pause — e.g. to let the order-book settle. Doesn't affect the depth prechecks, which always run first.</p>
+
     <div class="acct-section-title">Order safety — local to this browser</div>
     <label>Fat-finger WARNING threshold (lots)</label>
     <input type="number" id="tpWarnLotSize" min="1" step="1">
@@ -1409,7 +1413,7 @@ BUILDER_IDS.forEach(n=> document.getElementById(`spreadSpotLabel${n}`).textConte
 
 document.getElementById('refreshBtn').addEventListener('click', fetchSnapshot);
 document.getElementById('logoutBtn').addEventListener('click', ()=>{
-  if(confirm('Logout ho jaayein?')) window.__oddLogout();
+  if(confirm('Confirmed Logout?')) window.__oddLogout();
 });
 document.getElementById('pauseBtn').addEventListener('click', (e)=>{
   state.paused = !state.paused;
@@ -2612,6 +2616,7 @@ async function openTradeParams(){
       if(data.ok){
         document.getElementById('tpMaxLotSize').value = data.settings.max_lot_size;
         document.getElementById('tpDepthBandPct').value = data.settings.depth_band_pct;
+        document.getElementById('tpInterLegDelay').value = data.settings.inter_leg_delay_ms ?? 0;
         localStorage.setItem('doc_depth_band_pct', data.settings.depth_band_pct);
       } else {
         document.getElementById('tpStatus').textContent = 'Could not load server settings: ' + (data.error || 'unknown');
@@ -2648,6 +2653,7 @@ document.getElementById('tpSyncBtn').addEventListener('click', async ()=>{
   }
   const maxLot = parseInt(document.getElementById('tpMaxLotSize').value, 10);
   const band = parseFloat(document.getElementById('tpDepthBandPct').value);
+  const interLegDelay = parseInt(document.getElementById('tpInterLegDelay').value, 10) || 0;
   if(!maxLot || maxLot <= 0 || !band || band <= 0){
     document.getElementById('tpStatus').textContent = 'Enter valid positive numbers.';
     return;
@@ -2659,12 +2665,12 @@ document.getElementById('tpSyncBtn').addEventListener('click', async ()=>{
     const res = await fetch(LIVE.backendUrl.replace(/\/$/, '') + '/api/settings', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'X-App-Secret': LIVE.appSecret },
-      body: JSON.stringify({ max_lot_size: maxLot, depth_band_pct: band }),
+      body: JSON.stringify({ max_lot_size: maxLot, depth_band_pct: band, inter_leg_delay_ms: interLegDelay }),
     });
     const data = await res.json();
     if(data.ok){
       localStorage.setItem('doc_depth_band_pct', data.settings.depth_band_pct);
-      document.getElementById('tpStatus').textContent = `✓ Synced to server — hard block now ${data.settings.max_lot_size} lots, depth band ${data.settings.depth_band_pct}%.`;
+      document.getElementById('tpStatus').textContent = `✓ Synced to server — hard block ${data.settings.max_lot_size} lots, depth band ${data.settings.depth_band_pct}%, inter-leg delay ${data.settings.inter_leg_delay_ms}ms.`;
     } else {
       document.getElementById('tpStatus').textContent = 'Sync failed: ' + (data.error || 'unknown');
     }
