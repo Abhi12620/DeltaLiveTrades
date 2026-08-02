@@ -966,6 +966,27 @@
     <input type="number" id="tpInterLegDelay" min="0" step="50">
     <p class="note" style="margin:2px 0 8px;">0 = fire the sell leg immediately once the buy leg confirms (fastest, smallest market-move window). Raise this only if you deliberately want a pause — e.g. to let the order-book settle. Doesn't affect the depth prechecks, which always run first.</p>
 
+    <label>Sell-leg retry attempts</label>
+    <input type="number" id="tpSellRetries" min="0" step="1">
+    <p class="note" style="margin:2px 0 8px;">How many extra tries for the sell leg (after the first) before giving up and leaving the naked-long warning.</p>
+
+    <div class="acct-section-title">Emergency controls — synced to backend</div>
+    <label class="trade-col-toggle" style="margin:6px 0;">
+      <input type="checkbox" id="tpKillSwitch">
+      <span class="tct-track"><span class="tct-thumb"></span></span>
+      <span class="tct-label">🛑 Kill switch — block ALL live orders</span>
+    </label>
+    <label class="trade-col-toggle" style="margin:6px 0;">
+      <input type="checkbox" id="tpDryRun">
+      <span class="tct-track"><span class="tct-thumb"></span></span>
+      <span class="tct-label">🧪 Dry-run mode — simulate only, no real orders</span>
+    </label>
+    <p class="note" style="margin:2px 0 8px;">Dry-run still runs the real depth checks and margin precheck, but never sends an actual order to Delta — response looks identical, tagged "dry_run". Use this to test the whole flow (including fat-finger warnings) risk-free.</p>
+
+    <div class="acct-section-title">Active Delta account — synced to backend</div>
+    <div id="tpAccountSwitcher" class="order-spec"></div>
+    <p class="note" style="margin:6px 0 8px;">Both accounts' keys live in Render env vars (DELTA_API_KEY_A/B, DELTA_API_SECRET_A/B) — only which one is "active" is switched from here, never the keys themselves.</p>
+
     <div class="acct-section-title">Order safety — local to this browser</div>
     <label>Fat-finger WARNING threshold (lots)</label>
     <input type="number" id="tpWarnLotSize" min="1" step="1">
@@ -2435,14 +2456,17 @@ async function submitSpreadOrder(){
     const buyLeg = data.leg1, sellLeg = data.leg2;
     if(data.ok){
       const fillTxt = (buyLeg&&sellLeg) ? ` — filled ${buyLeg.filled_size}@${buyLeg.avg_price ?? '?'} / ${sellLeg.filled_size}@${sellLeg.avg_price ?? '?'}` : '';
-      showTradeToast(legs.dirParam, `LIVE ${legs.dirParam==='buy'?'BUY':'SELL'} spread executed${fillTxt}${data.warning ? ' ⚠ '+data.warning : ''}`);
+      showTradeToast(legs.dirParam, `${data.dry_run?'🧪 DRY-RUN (simulated)':'LIVE'} ${legs.dirParam==='buy'?'BUY':'SELL'} spread executed${fillTxt}${data.warning ? ' ⚠ '+data.warning : ''}`);
       // record the ACTUAL fills (real qty + real avg price from Delta) into
-      // the payoff draft for tracking, not an estimate
-      const buyIsSingle = legs.buySingle;
-      const singleFill = buyIsSingle ? buyLeg : sellLeg;
-      const ratioFill = buyIsSingle ? sellLeg : buyLeg;
-      tradePayoffLeg(legs.side, legs.singleStrike, legs.singleExpiry, singleFill.avg_price || 0, buyIsSingle ? singleFill.filled_size : -singleFill.filled_size);
-      tradePayoffLeg(legs.side, legs.ratioStrike, legs.ratioExpiry, ratioFill.avg_price || 0, buyIsSingle ? -ratioFill.filled_size : ratioFill.filled_size);
+      // the payoff draft for tracking, not an estimate -- skip this for
+      // dry-run since nothing real happened
+      if(!data.dry_run){
+        const buyIsSingle = legs.buySingle;
+        const singleFill = buyIsSingle ? buyLeg : sellLeg;
+        const ratioFill = buyIsSingle ? sellLeg : buyLeg;
+        tradePayoffLeg(legs.side, legs.singleStrike, legs.singleExpiry, singleFill.avg_price || 0, buyIsSingle ? singleFill.filled_size : -singleFill.filled_size);
+        tradePayoffLeg(legs.side, legs.ratioStrike, legs.ratioExpiry, ratioFill.avg_price || 0, buyIsSingle ? -ratioFill.filled_size : ratioFill.filled_size);
+      }
       if(!data.warning) closeOrderQtyModal();
       else { errEl.textContent = '⚠ ' + data.warning; errEl.style.display = 'block'; }
     } else {
@@ -2602,10 +2626,48 @@ document.getElementById('orderLogOverlay').addEventListener('click', (e)=>{
 
 // ---- trade parameters panel: fat-finger, depth-band, etc. -- all apply
 // instantly, no code edit / redeploy / cache-clear needed ----
+let tpActiveAccount = 'A';
+function renderAccountSwitcher(accounts, active){
+  tpActiveAccount = active || 'A';
+  const el = document.getElementById('tpAccountSwitcher');
+  if(!accounts){ el.innerHTML = '<p class="note">Load the panel with the backend configured to see accounts.</p>'; return; }
+  el.innerHTML = ['A','B'].map(w=>{
+    const a = accounts[w] || {label:'Account '+w, configured:false};
+    const isActive = w === tpActiveAccount;
+    return `<div class="order-spec-row">
+      <span>${isActive?'<span class="side-tag buy">ACTIVE</span>':''}${a.label}${!a.configured?' <span style="color:var(--put);">(no keys set)</span>':''}</span>
+      <span class="val">${isActive ? '—' : `<button class="test-btn" data-switch-account="${w}" ${a.configured?'':'disabled'} style="padding:3px 10px;font-size:11px;">Switch</button>`}</span>
+    </div>`;
+  }).join('');
+  el.querySelectorAll('[data-switch-account]').forEach(btn=>{
+    btn.addEventListener('click', ()=>switchAccount(btn.dataset.switchAccount));
+  });
+}
+async function switchAccount(which){
+  if(!LIVE.backendUrl || !LIVE.appSecret) return;
+  document.getElementById('tpStatus').textContent = `Switching to ${which}…`;
+  try{
+    const res = await fetch(LIVE.backendUrl.replace(/\/$/, '') + '/api/settings', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-App-Secret': LIVE.appSecret },
+      body: JSON.stringify({ active_account: which }),
+    });
+    const data = await res.json();
+    if(data.ok){
+      renderAccountSwitcher(data.accounts, data.settings.active_account);
+      document.getElementById('tpStatus').textContent = `✓ Switched — active account is now ${data.accounts[which].label}.`;
+    } else {
+      document.getElementById('tpStatus').textContent = 'Switch failed: ' + (data.error || 'unknown');
+    }
+  } catch(e){
+    document.getElementById('tpStatus').textContent = 'Network/backend error: ' + e.message;
+  }
+}
 async function openTradeParams(){
   document.getElementById('tpWarnLotSize').value = localStorage.getItem('doc_fatfinger_warn_lots') || '100';
   document.getElementById('tpDepthBandPct').value = localStorage.getItem('doc_depth_band_pct') || '1.0';
   document.getElementById('tpStatus').textContent = '';
+  renderAccountSwitcher(null, 'A');
   document.getElementById('tradeParamsOverlay').classList.add('open');
   if(LIVE.backendUrl && LIVE.appSecret){
     try{
@@ -2617,6 +2679,10 @@ async function openTradeParams(){
         document.getElementById('tpMaxLotSize').value = data.settings.max_lot_size;
         document.getElementById('tpDepthBandPct').value = data.settings.depth_band_pct;
         document.getElementById('tpInterLegDelay').value = data.settings.inter_leg_delay_ms ?? 0;
+        document.getElementById('tpSellRetries').value = data.settings.sell_leg_retries ?? 2;
+        document.getElementById('tpDryRun').checked = !!data.settings.dry_run;
+        document.getElementById('tpKillSwitch').checked = !!data.settings.kill_switch;
+        renderAccountSwitcher(data.accounts, data.settings.active_account);
         localStorage.setItem('doc_depth_band_pct', data.settings.depth_band_pct);
       } else {
         document.getElementById('tpStatus').textContent = 'Could not load server settings: ' + (data.error || 'unknown');
@@ -2625,7 +2691,7 @@ async function openTradeParams(){
       document.getElementById('tpStatus').textContent = 'Could not reach backend to load current server settings: ' + e.message;
     }
   } else {
-    document.getElementById('tpStatus').textContent = 'Backend not configured yet ("🔴 Live orders") — showing local values only; max-lot-size can\'t be synced until it is.';
+    document.getElementById('tpStatus').textContent = 'Backend not configured yet ("🔴 Live orders") — showing local values only; server-side settings can\'t be synced until it is.';
   }
 }
 document.getElementById('tradeParamsBtn').addEventListener('click', openTradeParams);
@@ -2654,7 +2720,10 @@ document.getElementById('tpSyncBtn').addEventListener('click', async ()=>{
   const maxLot = parseInt(document.getElementById('tpMaxLotSize').value, 10);
   const band = parseFloat(document.getElementById('tpDepthBandPct').value);
   const interLegDelay = parseInt(document.getElementById('tpInterLegDelay').value, 10) || 0;
-  if(!maxLot || maxLot <= 0 || !band || band <= 0){
+  const sellRetries = parseInt(document.getElementById('tpSellRetries').value, 10);
+  const dryRun = document.getElementById('tpDryRun').checked;
+  const killSwitch = document.getElementById('tpKillSwitch').checked;
+  if(!maxLot || maxLot <= 0 || !band || band <= 0 || sellRetries === '' || sellRetries < 0 || isNaN(sellRetries)){
     document.getElementById('tpStatus').textContent = 'Enter valid positive numbers.';
     return;
   }
@@ -2665,12 +2734,16 @@ document.getElementById('tpSyncBtn').addEventListener('click', async ()=>{
     const res = await fetch(LIVE.backendUrl.replace(/\/$/, '') + '/api/settings', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'X-App-Secret': LIVE.appSecret },
-      body: JSON.stringify({ max_lot_size: maxLot, depth_band_pct: band, inter_leg_delay_ms: interLegDelay }),
+      body: JSON.stringify({
+        max_lot_size: maxLot, depth_band_pct: band, inter_leg_delay_ms: interLegDelay,
+        sell_leg_retries: sellRetries, dry_run: dryRun, kill_switch: killSwitch,
+      }),
     });
     const data = await res.json();
     if(data.ok){
       localStorage.setItem('doc_depth_band_pct', data.settings.depth_band_pct);
-      document.getElementById('tpStatus').textContent = `✓ Synced to server — hard block ${data.settings.max_lot_size} lots, depth band ${data.settings.depth_band_pct}%, inter-leg delay ${data.settings.inter_leg_delay_ms}ms.`;
+      renderAccountSwitcher(data.accounts, data.settings.active_account);
+      document.getElementById('tpStatus').textContent = `✓ Synced — hard block ${data.settings.max_lot_size} lots, depth band ${data.settings.depth_band_pct}%, inter-leg delay ${data.settings.inter_leg_delay_ms}ms, sell retries ${data.settings.sell_leg_retries}, dry-run ${data.settings.dry_run?'ON':'off'}, kill switch ${data.settings.kill_switch?'ON 🛑':'off'}.`;
     } else {
       document.getElementById('tpStatus').textContent = 'Sync failed: ' + (data.error || 'unknown');
     }

@@ -16,16 +16,37 @@ CORS(app)
 BASE_URL = "https://api.india.delta.exchange"
 
 # ---- set these as ENVIRONMENT VARIABLES in Render, never hardcode them here ----
-API_KEY = os.environ.get("DELTA_API_KEY", "")
-API_SECRET = os.environ.get("DELTA_API_SECRET", "")
+# Two accounts supported so you can switch between them from the dashboard
+# without a redeploy. Old single-account env vars (DELTA_API_KEY/SECRET) still
+# work and are treated as "Account A" if the _A versions aren't set.
 APP_SECRET = os.environ.get("APP_SECRET", "")  # shared secret between the dashboard and this backend
+
+ACCOUNT_LABELS = {
+    "A": os.environ.get("DELTA_ACCOUNT_A_LABEL", "Account A"),
+    "B": os.environ.get("DELTA_ACCOUNT_B_LABEL", "Account B"),
+}
+
+
+def get_credentials(which):
+    if which == "B":
+        return os.environ.get("DELTA_API_KEY_B", ""), os.environ.get("DELTA_API_SECRET_B", "")
+    return (
+        os.environ.get("DELTA_API_KEY_A") or os.environ.get("DELTA_API_KEY", ""),
+        os.environ.get("DELTA_API_SECRET_A") or os.environ.get("DELTA_API_SECRET", ""),
+    )
+
+
+def get_active_credentials():
+    """Which account (A/B) is active is a SETTING (persisted, switchable
+    from the dashboard, no redeploy) -- the actual key/secret values
+    themselves always stay in Render env vars, never touch the dashboard."""
+    return get_credentials(load_settings().get("active_account", "A"))
 
 # ---- tunables: runtime-editable via /api/settings, persisted to a local
 # JSON file so they survive without needing a Render redeploy. Env vars are
 # only the FIRST-TIME defaults (used if the settings file doesn't exist yet).
 FILL_POLL_ATTEMPTS = 6
 FILL_POLL_DELAY = 0.15   # seconds between order-status polls (market orders resolve almost instantly)
-SELL_LEG_RETRIES = 2
 
 SETTINGS_PATH = os.path.join(os.path.dirname(__file__), "settings.json")
 _settings_lock = threading.Lock()
@@ -33,6 +54,10 @@ _DEFAULT_SETTINGS = {
     "max_lot_size": int(os.environ.get("MAX_LOT_SIZE", "500")),
     "depth_band_pct": float(os.environ.get("DEPTH_BAND_PCT", "1.0")),  # stored as a PERCENT (e.g. 1.0 = 1%)
     "inter_leg_delay_ms": int(os.environ.get("INTER_LEG_DELAY_MS", "0")),  # deliberate pause AFTER the buy leg confirms, BEFORE the sell leg fires (0 = fire as soon as ready)
+    "active_account": "A",       # which Delta API key/secret pair is currently in use ("A" or "B")
+    "dry_run": False,            # if true, every check (margin/depth) still runs for real, but NO real order is sent to Delta -- fully simulated response instead
+    "kill_switch": False,        # if true, /api/place-spread refuses everything immediately, no exceptions
+    "sell_leg_retries": 2,       # how many extra attempts for the sell leg before giving up
 }
 
 
@@ -75,10 +100,10 @@ def audit(event, **fields):
 
 
 # ==================== Delta auth / request helpers ====================
-def _sign(method, path, query, body):
+def _sign(method, path, query, body, api_secret):
     ts = str(int(time.time()))
     payload = method + ts + path + query + body
-    sig = hmac.new(API_SECRET.encode(), payload.encode(), hashlib.sha256).hexdigest()
+    sig = hmac.new(api_secret.encode(), payload.encode(), hashlib.sha256).hexdigest()
     return ts, sig
 
 
@@ -88,8 +113,9 @@ def _delta_get(path, params=None, signed=True):
         query = "?" + "&".join(f"{k}={v}" for k, v in params.items())
     headers = {"Content-Type": "application/json", "Accept": "application/json"}
     if signed:
-        ts, sig = _sign("GET", path, query, "")
-        headers.update({"api-key": API_KEY, "timestamp": ts, "signature": sig})
+        api_key, api_secret = get_active_credentials()
+        ts, sig = _sign("GET", path, query, "", api_secret)
+        headers.update({"api-key": api_key, "timestamp": ts, "signature": sig})
     r = requests.get(BASE_URL + path + query, headers=headers, timeout=10)
     try:
         return r.status_code, r.json()
@@ -98,10 +124,11 @@ def _delta_get(path, params=None, signed=True):
 
 
 def _delta_post(path, body_dict):
+    api_key, api_secret = get_active_credentials()
     body = json.dumps(body_dict)
-    ts, sig = _sign("POST", path, "", body)
+    ts, sig = _sign("POST", path, "", body, api_secret)
     headers = {
-        "api-key": API_KEY, "timestamp": ts, "signature": sig,
+        "api-key": api_key, "timestamp": ts, "signature": sig,
         "Content-Type": "application/json", "Accept": "application/json",
     }
     r = requests.post(BASE_URL + path, data=body, headers=headers, timeout=10)
@@ -112,10 +139,11 @@ def _delta_post(path, body_dict):
 
 
 def _delta_delete(path, body_dict):
+    api_key, api_secret = get_active_credentials()
     body = json.dumps(body_dict)
-    ts, sig = _sign("DELETE", path, "", body)
+    ts, sig = _sign("DELETE", path, "", body, api_secret)
     headers = {
-        "api-key": API_KEY, "timestamp": ts, "signature": sig,
+        "api-key": api_key, "timestamp": ts, "signature": sig,
         "Content-Type": "application/json", "Accept": "application/json",
     }
     r = requests.delete(BASE_URL + path, data=body, headers=headers, timeout=10)
@@ -187,13 +215,16 @@ def round_to_tick(price, tick_size):
 
 
 # ==================== depth-checked market order placement ====================
-def place_market_leg(symbol, side, size, band_pct=None):
+def place_market_leg(symbol, side, size, band_pct=None, dry_run=False):
     """1) Checks L2 orderbook depth near the best price BEFORE placing anything
           -- if the book can't realistically absorb `size`, the order is never
           sent at all.
-       2) If depth is sufficient, places a plain MARKET order (no limit price).
+       2) If depth is sufficient, places a plain MARKET order (no limit price) --
+          unless dry_run is True, in which case everything up to and including
+          the depth check is real, but no order is actually sent to Delta; a
+          simulated fill is returned instead (using the best available price).
        3) Polls the order status afterwards so the returned fill size/price are
-          the REAL executed values, not an assumption."""
+          the REAL executed values, not an assumption (skipped in dry_run)."""
     if band_pct is None:
         band_pct = load_settings()["depth_band_pct"] / 100.0
     try:
@@ -216,6 +247,16 @@ def place_market_leg(symbol, side, size, band_pct=None):
             ),
             "depth_available": depth["available"], "depth_checked_pct": band_pct * 100,
         }
+
+    if dry_run:
+        leg_result = {
+            "symbol": symbol, "ok": True, "order_id": "DRY_RUN", "dry_run": True,
+            "requested_size": int(size), "filled_size": int(size), "unfilled_size": 0,
+            "avg_price": depth["best_price"], "state": "simulated",
+            "depth_available_precheck": depth["available"],
+        }
+        audit("dry_run_order", **leg_result)
+        return leg_result
 
     body = {
         "product_id": product["id"],
@@ -255,7 +296,6 @@ def place_market_leg(symbol, side, size, band_pct=None):
     }
     audit("order_result", **leg_result)
     return leg_result
-    return leg_result
 
 
 # NOTE: auto-unwind was intentionally removed per instruction. If the buy
@@ -281,10 +321,17 @@ def get_available_balance():
 # ==================== routes ====================
 @app.route("/api/health")
 def health():
+    settings = load_settings()
+    active = settings.get("active_account", "A")
+    key, secret = get_active_credentials()
     return jsonify({
         "ok": True,
-        "delta_key_configured": bool(API_KEY and API_SECRET),
+        "delta_key_configured": bool(key and secret),
         "app_secret_configured": bool(APP_SECRET),
+        "active_account": active,
+        "active_account_label": ACCOUNT_LABELS.get(active, active),
+        "kill_switch": settings.get("kill_switch", False),
+        "dry_run": settings.get("dry_run", False),
     })
 
 
@@ -293,8 +340,15 @@ def settings_endpoint():
     if not APP_SECRET or request.headers.get("X-App-Secret") != APP_SECRET:
         return jsonify({"ok": False, "error": "unauthorized"}), 401
 
+    def accounts_info():
+        info = {}
+        for which in ("A", "B"):
+            key, secret = get_credentials(which)
+            info[which] = {"label": ACCOUNT_LABELS[which], "configured": bool(key and secret)}
+        return info
+
     if request.method == "GET":
-        return jsonify({"ok": True, "settings": load_settings()})
+        return jsonify({"ok": True, "settings": load_settings(), "accounts": accounts_info()})
 
     data = request.get_json(force=True, silent=True) or {}
     current = load_settings()
@@ -322,9 +376,30 @@ def settings_endpoint():
             current["inter_leg_delay_ms"] = v
         except (ValueError, TypeError):
             return jsonify({"ok": False, "error": "inter_leg_delay_ms must be a non-negative integer"}), 400
+    if "sell_leg_retries" in data:
+        try:
+            v = int(data["sell_leg_retries"])
+            if v < 0:
+                raise ValueError()
+            current["sell_leg_retries"] = v
+        except (ValueError, TypeError):
+            return jsonify({"ok": False, "error": "sell_leg_retries must be a non-negative integer"}), 400
+    if "dry_run" in data:
+        current["dry_run"] = bool(data["dry_run"])
+    if "kill_switch" in data:
+        current["kill_switch"] = bool(data["kill_switch"])
+    if "active_account" in data:
+        which = data["active_account"]
+        if which not in ("A", "B"):
+            return jsonify({"ok": False, "error": "active_account must be 'A' or 'B'"}), 400
+        key, secret = get_credentials(which)
+        if not key or not secret:
+            return jsonify({"ok": False, "error": f"Account {which} has no credentials configured on the server (DELTA_API_KEY_{which}/DELTA_API_SECRET_{which}) — refusing to switch to it."}), 400
+        current["active_account"] = which
+
     save_settings(current)
     audit("settings_updated", settings=current)
-    return jsonify({"ok": True, "settings": current})
+    return jsonify({"ok": True, "settings": current, "accounts": accounts_info()})
 
 
 @app.route("/api/order-log")
@@ -345,8 +420,9 @@ def order_log():
 def account_info():
     if not APP_SECRET or request.headers.get("X-App-Secret") != APP_SECRET:
         return jsonify({"ok": False, "error": "unauthorized"}), 401
-    if not API_KEY or not API_SECRET:
-        return jsonify({"ok": False, "error": "Delta API credentials not configured on server"}), 500
+    active_key, active_secret = get_active_credentials()
+    if not active_key or not active_secret:
+        return jsonify({"ok": False, "error": "Delta API credentials not configured for the active account on the server"}), 500
 
     bal_status, bal_data = _delta_get("/v2/wallet/balances")
     balances = []
@@ -447,14 +523,23 @@ def precheck_leg(symbol, side, size, band_pct):
 def place_spread():
     if not APP_SECRET or request.headers.get("X-App-Secret") != APP_SECRET:
         return jsonify({"ok": False, "error": "unauthorized"}), 401
-    if not API_KEY or not API_SECRET:
-        return jsonify({"ok": False, "error": "Delta API credentials not configured on server"}), 500
+
+    settings = load_settings()
+
+    if settings.get("kill_switch"):
+        audit("kill_switch_block")
+        return jsonify({"ok": False, "error": "🛑 Kill switch is ON — all live orders are blocked. Turn it off in the dashboard's Trade Params panel to resume."}), 403
+
+    active_key, active_secret = get_active_credentials()
+    if not active_key or not active_secret:
+        return jsonify({"ok": False, "error": f"Delta API credentials not configured for the active account ({ACCOUNT_LABELS.get(settings.get('active_account','A'))}) on the server"}), 500
+
+    dry_run = bool(settings.get("dry_run"))
 
     data = request.get_json(force=True, silent=True) or {}
     leg1 = data.get("leg1")
     leg2 = data.get("leg2")
     ratio = float(data.get("ratio", 1))
-    settings = load_settings()
     depth_band_pct = float(data.get("depth_band_pct", settings["depth_band_pct"] / 100.0))
 
     if not leg1 or not leg2:
@@ -509,7 +594,7 @@ def place_spread():
         if not (sell_precheck and sell_precheck["ok"]):
             problems.append(f"SELL {sell_leg['symbol']}: only {sell_precheck['available']:.0f} lots depth available (need {sell_leg['size']})" if sell_precheck else "SELL precheck failed")
         return jsonify({
-            "ok": False, "leg1": None, "leg2": None,
+            "ok": False, "leg1": None, "leg2": None, "dry_run": dry_run,
             "error": "Insufficient orderbook depth on at least one leg — nothing was placed. " + " · ".join(problems),
         })
 
@@ -518,10 +603,10 @@ def place_spread():
     # unwind. If leg 2 (sell) later fails, the leftover position is a
     # bounded-risk naked LONG (worst case: lose the premium already paid),
     # not an uncovered short -- the safer failure mode to be left holding.
-    buy_result = place_market_leg(buy_leg["symbol"], "buy", buy_leg["size"], depth_band_pct)
+    buy_result = place_market_leg(buy_leg["symbol"], "buy", buy_leg["size"], depth_band_pct, dry_run=dry_run)
     if not buy_result["ok"]:
         return jsonify({
-            "ok": False, "leg1": buy_result, "leg2": None,
+            "ok": False, "leg1": buy_result, "leg2": None, "dry_run": dry_run,
             "error": "Buy leg did not fill (or insufficient orderbook depth) — no position taken, sell leg was not attempted.",
         })
 
@@ -539,8 +624,8 @@ def place_spread():
 
     # ---- leg 2: SELL fires SECOND, with retries (margin-gated side) ----
     sell_result = None
-    for attempt in range(SELL_LEG_RETRIES + 1):
-        sell_result = place_market_leg(sell_leg["symbol"], "sell", sell_size, depth_band_pct)
+    for attempt in range(settings.get("sell_leg_retries", 2) + 1):
+        sell_result = place_market_leg(sell_leg["symbol"], "sell", sell_size, depth_band_pct, dry_run=dry_run)
         if sell_result["ok"]:
             break
 
@@ -549,21 +634,21 @@ def place_spread():
         # the buy leg alone -- a naked long, bounded risk -- but still flag
         # it clearly so it gets looked at.
         return jsonify({
-            "ok": False, "leg1": buy_result, "leg2": sell_result,
+            "ok": False, "leg1": buy_result, "leg2": sell_result, "dry_run": dry_run,
             "error": (
                 f"Sell leg failed after retries (insufficient margin, thin book, or rejected). "
                 f"You have a naked LONG position of {buy_result['filled_size']} lots on {buy_leg['symbol']} "
                 f"left over from the buy leg. Auto-unwind is disabled — review manually."
-            ),
+            ) if not dry_run else "Sell leg simulation failed (insufficient depth) after retries. (dry run — no real position was taken on either leg.)",
         })
 
     if sell_result["filled_size"] < sell_size:
         return jsonify({
-            "ok": True, "leg1": buy_result, "leg2": sell_result,
+            "ok": True, "leg1": buy_result, "leg2": sell_result, "dry_run": dry_run,
             "warning": f"Sell leg partially filled ({sell_result['filled_size']}/{sell_size}); ratio vs the buy leg is now mismatched — review positions manually.",
         })
 
-    return jsonify({"ok": True, "leg1": buy_result, "leg2": sell_result, "warning": None})
+    return jsonify({"ok": True, "leg1": buy_result, "leg2": sell_result, "warning": None, "dry_run": dry_run})
 
 
 # ==================== keep-alive (best-effort, use UptimeRobot as primary) ====================
