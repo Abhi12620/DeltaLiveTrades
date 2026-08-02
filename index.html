@@ -274,6 +274,13 @@
   .alert-list-item{display:flex;align-items:center;justify-content:space-between;gap:8px;border:1px solid var(--border);border-radius:7px;padding:8px 10px;margin-top:8px;font-family:var(--mono);font-size:12px;}
   .alert-list-item .rm{color:#f2545b;cursor:pointer;font-weight:800;padding:0 4px;}
 
+  .acct-table{width:100%;border-collapse:collapse;margin-top:8px;font-family:var(--mono);font-size:11.5px;}
+  .acct-table th{text-align:left;color:var(--muted);font-weight:700;padding:4px 6px;border-bottom:1px solid var(--border);}
+  .acct-table td{padding:5px 6px;border-bottom:1px solid var(--border);}
+  .acct-summary-row{display:flex;justify-content:space-between;font-family:var(--mono);font-size:12.5px;padding:4px 0;}
+  .acct-summary-row b{color:var(--text);}
+  .acct-section-title{font-size:11px;color:var(--muted);font-weight:800;text-transform:uppercase;letter-spacing:.05em;margin:14px 0 4px;}
+
   /* ---- login gate ---- */
   #loginGate{position:fixed;inset:0;z-index:99999;background:var(--bg);display:flex;align-items:center;justify-content:center;padding:20px;}
   #loginGate.hidden{display:none;}
@@ -481,8 +488,8 @@
 </div>
 <script>
 (function(){
-  var AUTH_ID = 'AbhishekGol';
-  var AUTH_PASS = 'Abhi@242897D';
+  var AUTH_ID = 'ADMIN';
+  var AUTH_PASS = '102030';
   var gate = document.getElementById('loginGate');
   if(sessionStorage.getItem('odd_auth') === 'true'){ gate.classList.add('hidden'); return; }
   function tryLogin(){
@@ -647,6 +654,7 @@
       </label>
       <button class="alert-settings-btn" id="alertSettingsBtn" style="margin-left:auto;">🔔 Alerts</button>
       <button class="alert-settings-btn" id="liveTradeSettingsBtn" title="Configure live order execution backend">🔴 Live orders</button>
+      <button class="alert-settings-btn" id="accountInfoBtn" title="Live Delta balance, margin mode, positions">📊 Account</button>
     </div>
     <div id="spreadBuildersRoot"></div>
   </div>
@@ -864,6 +872,7 @@
   <div class="alert-popover">
     <h4 id="orderQtyTitle">Place spread order</h4>
     <p class="note" id="orderQtyLegs" style="color:var(--muted);font-size:11.5px;margin-bottom:10px;line-height:1.5;"></p>
+    <p class="note" id="orderQtyBackendStatus" style="font-size:11.5px;margin-bottom:10px;"></p>
     <div class="row">
       <input type="number" id="orderQtyInput" placeholder="lots e.g. 100" min="1" step="1">
     </div>
@@ -887,6 +896,20 @@
       <button class="test-btn" id="liveTestBtn">Test connection</button>
       <button class="save-btn" id="liveSaveBtn">Save</button>
       <button id="liveCloseBtn">Close</button>
+    </div>
+  </div>
+</div>
+
+<div class="alert-popover-overlay" id="accountInfoOverlay">
+  <div class="settings-modal" style="max-width:560px;">
+    <h4>Delta account — live</h4>
+    <p class="note" id="acctStatus">Loading…</p>
+    <div id="acctSummary"></div>
+    <div id="acctBalances"></div>
+    <div id="acctPositions"></div>
+    <div class="btnrow">
+      <button class="test-btn" id="acctRefreshBtn">Refresh</button>
+      <button id="acctCloseBtn">Close</button>
     </div>
   </div>
 </div>
@@ -1324,7 +1347,7 @@ BUILDER_IDS.forEach(n=> document.getElementById(`spreadSpotLabel${n}`).textConte
 
 document.getElementById('refreshBtn').addEventListener('click', fetchSnapshot);
 document.getElementById('logoutBtn').addEventListener('click', ()=>{
-  if(confirm('Confirmed Logout?')) window.__oddLogout();
+  if(confirm('Logout ho jaayein?')) window.__oddLogout();
 });
 document.getElementById('pauseBtn').addEventListener('click', (e)=>{
   state.paused = !state.paused;
@@ -2221,15 +2244,69 @@ function openOrderQtyModal(params){
   document.getElementById('orderQtyInput').value = '';
   document.getElementById('orderQtyOverlay').classList.add('open');
   document.getElementById('orderQtyInput').focus();
+  setBackendStatus('checking', 'Checking backend…');
+  ensureBackendAwake(setBackendStatus);
 }
 function closeOrderQtyModal(){
   document.getElementById('orderQtyOverlay').classList.remove('open');
   currentOrderCtx = null;
+  wakeCheckActive = false;
 }
 document.getElementById('orderQtyCancelBtn').addEventListener('click', closeOrderQtyModal);
 document.getElementById('orderQtyOverlay').addEventListener('click', (e)=>{
   if(e.target.id === 'orderQtyOverlay') closeOrderQtyModal();
 });
+
+// ---- backend wake-check: never fire an order at a sleeping/cold-starting
+// Render instance — ping /api/health first and only enable placing the
+// order once it responds. Avoids the dangerous ambiguous state where an
+// order request times out mid-cold-start and you don't know if it landed.
+let wakeCheckActive = false;
+async function pingBackend(timeoutMs){
+  if(!LIVE.backendUrl) return false;
+  const controller = new AbortController();
+  const t = setTimeout(()=>controller.abort(), timeoutMs);
+  try{
+    const res = await fetch(LIVE.backendUrl.replace(/\/$/, '') + '/api/health', { signal: controller.signal });
+    clearTimeout(t);
+    if(!res.ok) return false;
+    const data = await res.json();
+    return !!data.ok;
+  }catch(e){
+    clearTimeout(t);
+    return false;
+  }
+}
+async function ensureBackendAwake(onStatus){
+  if(!LIVE.backendUrl || !LIVE.appSecret){
+    onStatus('failed', 'Live order backend not configured — click "🔴 Live orders" in the toolbar first.');
+    return false;
+  }
+  const myRun = (wakeCheckActive = true, wakeCheckActive);
+  onStatus('checking', 'Checking backend…');
+  const quick = await pingBackend(4000);
+  if(!wakeCheckActive) return false; // modal was closed mid-check
+  if(quick){ onStatus('awake', '🟢 Backend awake — ready to place order'); return true; }
+  onStatus('waking', '🟠 Backend asleep — waking it up (Render free tier, can take 30-60s)…');
+  const maxAttempts = 20; // ~80s ceiling
+  for(let i=0;i<maxAttempts;i++){
+    await new Promise(r=>setTimeout(r, 4000));
+    if(!wakeCheckActive) return false;
+    const ok = await pingBackend(4000);
+    if(ok){ onStatus('awake', '🟢 Backend awake — ready to place order'); return true; }
+    onStatus('waking', `🟠 Still waking up… (${(i+1)*4}s elapsed)`);
+  }
+  onStatus('failed', '🔴 Backend did not wake up — check your Render service status directly.');
+  return false;
+}
+function setBackendStatus(state, text){
+  const el = document.getElementById('orderQtyBackendStatus');
+  const btn = document.getElementById('orderQtyConfirmBtn');
+  el.textContent = text;
+  el.style.color = state==='awake' ? 'var(--call)' : state==='failed' ? 'var(--put)' : 'var(--muted)';
+  btn.disabled = state !== 'awake';
+  btn.style.opacity = state === 'awake' ? '1' : '.5';
+}
 
 async function submitSpreadOrder(){
   const errEl = document.getElementById('orderQtyErr');
@@ -2244,6 +2321,14 @@ async function submitSpreadOrder(){
   if(!qty || qty <= 0){
     errEl.textContent = 'Enter a valid lot size (whole number, > 0).';
     errEl.style.display = 'block';
+    return;
+  }
+  // re-verify right before firing — the modal may have sat open a while
+  // and the backend could have gone back to sleep since it was last checked
+  const stillAwake = await ensureBackendAwake(setBackendStatus);
+  if(!stillAwake) return;
+  // fat-finger guard on unusually large lot sizes
+  if(qty >= 50 && !confirm(`Confirm: place LIVE order for ${qty} lots (base leg)? This cannot be undone.`)){
     return;
   }
   const legs = currentOrderCtx;
@@ -2328,6 +2413,75 @@ document.getElementById('liveTestBtn').addEventListener('click', async ()=>{
     btn.textContent = 'Failed: ' + e.message;
   }
   setTimeout(()=>{ btn.textContent = original; }, 3000);
+});
+
+// ---- account info panel: live balances / margin mode / positions ----
+function fmtUsd(n){ return n==null || isNaN(n) ? '—' : '$' + Number(n).toLocaleString('en-US', {maximumFractionDigits:2}); }
+function fmtInr(n){ return n==null || isNaN(n) ? '—' : '₹' + Number(n).toLocaleString('en-IN', {maximumFractionDigits:0}); }
+
+async function loadAccountInfo(){
+  const statusEl = document.getElementById('acctStatus');
+  const summaryEl = document.getElementById('acctSummary');
+  const balEl = document.getElementById('acctBalances');
+  const posEl = document.getElementById('acctPositions');
+  if(!LIVE.backendUrl || !LIVE.appSecret){
+    statusEl.textContent = 'Live order backend not configured — click "🔴 Live orders" first.';
+    summaryEl.innerHTML = ''; balEl.innerHTML = ''; posEl.innerHTML = '';
+    return;
+  }
+  statusEl.textContent = 'Loading…';
+  summaryEl.innerHTML = ''; balEl.innerHTML = ''; posEl.innerHTML = '';
+  try{
+    const res = await fetch(LIVE.backendUrl.replace(/\/$/, '') + '/api/account-info', {
+      headers: { 'X-App-Secret': LIVE.appSecret },
+    });
+    const data = await res.json();
+    if(!data.ok){
+      statusEl.textContent = 'Error: ' + (data.error || 'unknown');
+      return;
+    }
+    statusEl.textContent = '';
+
+    summaryEl.innerHTML = `
+      <div class="acct-summary-row"><span>Margin mode</span><b>${(data.margin_mode||'unknown').toUpperCase()}</b></div>
+      <div class="acct-summary-row"><span>Net equity (USD)</span><b>${fmtUsd(data.net_equity_usd)}</b></div>
+      <div class="acct-summary-row"><span>Net equity (INR, approx.)</span><b>${fmtInr(data.net_equity_inr)}</b></div>
+    ` + (data.margin_mode_note ? `<p class="note" style="margin-top:4px;">${data.margin_mode_note}</p>` : '');
+
+    let balHtml = '<div class="acct-section-title">Balances</div>';
+    if(data.balances && data.balances.length){
+      balHtml += '<table class="acct-table"><thead><tr><th>Asset</th><th>Balance</th><th>Available</th></tr></thead><tbody>' +
+        data.balances.map(b=>`<tr><td>${b.asset}</td><td>${Number(b.balance).toLocaleString(undefined,{maximumFractionDigits:4})}</td><td>${Number(b.available_balance).toLocaleString(undefined,{maximumFractionDigits:4})}</td></tr>`).join('') +
+        '</tbody></table>';
+    } else {
+      balHtml += '<p class="note">No non-zero balances.</p>';
+    }
+    balEl.innerHTML = balHtml;
+
+    let posHtml = '<div class="acct-section-title">Open positions</div>';
+    if(data.positions && data.positions.length){
+      posHtml += '<table class="acct-table"><thead><tr><th>Symbol</th><th>Size</th><th>Entry</th><th>Mark</th><th>uPnL</th></tr></thead><tbody>' +
+        data.positions.map(p=>`<tr><td>${p.symbol}</td><td style="color:${p.size>0?'var(--call)':'var(--put)'}">${p.size>0?'+':''}${p.size}</td><td>${p.entry_price??'—'}</td><td>${p.mark_price??'—'}</td><td>${p.unrealized_pnl??'—'}</td></tr>`).join('') +
+        '</tbody></table>';
+    } else {
+      posHtml += '<p class="note">No open positions.</p>';
+    }
+    if(data.positions_note) posHtml += `<p class="note">${data.positions_note}</p>`;
+    posEl.innerHTML = posHtml;
+  } catch(e){
+    statusEl.textContent = 'Network/backend error: ' + e.message;
+  }
+}
+document.getElementById('accountInfoBtn').addEventListener('click', ()=>{
+  document.getElementById('accountInfoOverlay').classList.add('open');
+  loadAccountInfo();
+});
+document.getElementById('acctRefreshBtn').addEventListener('click', loadAccountInfo);
+document.getElementById('acctCloseBtn').addEventListener('click', ()=>{
+  document.getElementById('accountInfoOverlay').classList.remove('open');
+});
+document.getElementById('accountInfoOverlay').addEventListener('click', (e)=>{
+  if(e.target.id === 'accountInfoOverlay') document.getElementById('accountInfoOverlay').classList.remove('open');
 });
 
 // Toast notifications for actions whose visual context (like a spread
