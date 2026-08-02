@@ -1380,7 +1380,7 @@ BUILDER_IDS.forEach(n=> document.getElementById(`spreadSpotLabel${n}`).textConte
 
 document.getElementById('refreshBtn').addEventListener('click', fetchSnapshot);
 document.getElementById('logoutBtn').addEventListener('click', ()=>{
-  if(confirm('Logout ho jaayein?')) window.__oddLogout();
+  if(confirm('Confirmed Logout?')) window.__oddLogout();
 });
 document.getElementById('pauseBtn').addEventListener('click', (e)=>{
   state.paused = !state.paused;
