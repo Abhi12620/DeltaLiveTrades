@@ -2374,7 +2374,7 @@ async function submitSpreadOrder(){
   const stillAwake = await ensureBackendAwake(setBackendStatus);
   if(!stillAwake) return;
   // fat-finger guard on unusually large lot sizes
-  if(qty > 5 && !confirm(`⚠ Fat-finger check: you're about to place a LIVE order for ${qty} lots (base leg) — more than 100. Confirm this is correct?`)){
+  if(qty > 5 && !confirm(`⚠ Fat-finger check: you're about to place a LIVE order for ${qty} lots (base leg) — more than 5. Confirm this is correct?`)){
     return;
   }
   const legs = currentOrderCtx;
