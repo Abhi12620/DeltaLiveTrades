@@ -53,20 +53,7 @@ _fx_cache = {"rate": None, "ts": 0}
 
 
 def get_usd_inr_rate():
-    """Cached ~10min: USD->INR rate from a free, keyless FX API. This is an
-    approximate ECB-based reference rate, not Delta's own crypto-pair rate,
-    so treat the INR figure as indicative rather than exact."""
-    now = time.time()
-    if _fx_cache["rate"] and (now - _fx_cache["ts"]) < 600:
-        return _fx_cache["rate"]
-    try:
-        r = requests.get("https://api.frankfurter.app/latest?from=USD&to=INR", timeout=8)
-        rate = r.json()["rates"]["INR"]
-        _fx_cache["rate"] = rate
-        _fx_cache["ts"] = now
-        return rate
-    except Exception:
-        return _fx_cache["rate"]  # may be None if never fetched successfully
+    return 85.0
 
 
 def _delta_post(path, body_dict):
