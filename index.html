@@ -655,6 +655,7 @@
       <button class="alert-settings-btn" id="alertSettingsBtn" style="margin-left:auto;">🔔 Alerts</button>
       <button class="alert-settings-btn" id="liveTradeSettingsBtn" title="Configure live order execution backend">🔴 Live orders</button>
       <button class="alert-settings-btn" id="accountInfoBtn" title="Live Delta balance, margin mode, positions">📊 Account</button>
+      <button class="alert-settings-btn" id="orderLogBtn" title="Audit trail of every order attempt">🧾 Order log</button>
     </div>
     <div id="spreadBuildersRoot"></div>
   </div>
@@ -876,9 +877,12 @@
     <div class="row">
       <input type="number" id="orderQtyInput" placeholder="lots e.g. 100" min="1" step="1">
     </div>
+    <div class="row">
+      <input type="number" id="orderSlippageInput" placeholder="depth-check band % (default 1.0)" min="0.1" step="0.1" value="1.0">
+    </div>
     <p class="note" id="orderQtyErr" style="color:var(--put);display:none;margin-bottom:8px;"></p>
     <div class="btnrow">
-      <button class="save-btn" id="orderQtyConfirmBtn">Place market order</button>
+      <button class="save-btn" id="orderQtyConfirmBtn">Place order (buy leg first)</button>
       <button class="cancel-btn" id="orderQtyCancelBtn">Cancel</button>
     </div>
   </div>
@@ -910,6 +914,18 @@
     <div class="btnrow">
       <button class="test-btn" id="acctRefreshBtn">Refresh</button>
       <button id="acctCloseBtn">Close</button>
+    </div>
+  </div>
+</div>
+
+<div class="alert-popover-overlay" id="orderLogOverlay">
+  <div class="settings-modal" style="max-width:640px;">
+    <h4>Order audit log</h4>
+    <p class="note">Every order attempt/result, logged server-side. Lives on Render's local disk — survives normal operation but resets on redeploy.</p>
+    <pre id="orderLogBody" style="max-height:340px;overflow:auto;background:var(--surface3);border:1px solid var(--border);border-radius:7px;padding:10px;font-size:10.5px;line-height:1.5;white-space:pre-wrap;word-break:break-all;"></pre>
+    <div class="btnrow">
+      <button class="test-btn" id="orderLogRefreshBtn">Refresh</button>
+      <button id="orderLogCloseBtn">Close</button>
     </div>
   </div>
 </div>
@@ -1347,7 +1363,7 @@ BUILDER_IDS.forEach(n=> document.getElementById(`spreadSpotLabel${n}`).textConte
 
 document.getElementById('refreshBtn').addEventListener('click', fetchSnapshot);
 document.getElementById('logoutBtn').addEventListener('click', ()=>{
-  if(confirm(' Confirmed Logout?')) window.__oddLogout();
+  if(confirm('Logout ho jaayein?')) window.__oddLogout();
 });
 document.getElementById('pauseBtn').addEventListener('click', (e)=>{
   state.paused = !state.paused;
@@ -2236,8 +2252,12 @@ function openOrderQtyModal(params){
   const oppLbl = params.dir==='buy' ? 'SELL' : 'BUY';
   document.getElementById('orderQtyTitle').textContent = `${dirLbl} spread: ${fmtStrike(params.s1)}/${params.s2!==null && !isNaN(params.s2) ? fmtStrike(params.s2) : '—'} (${typeLbl})`;
   if(legs){
+    const buySide = legs.buySingle ? {strike:legs.singleStrike,expiry:legs.singleExpiry,mult:1} : {strike:legs.ratioStrike,expiry:legs.ratioExpiry,mult:legs.ratio};
+    const sellSide = legs.buySingle ? {strike:legs.ratioStrike,expiry:legs.ratioExpiry,mult:legs.ratio} : {strike:legs.singleStrike,expiry:legs.singleExpiry,mult:1};
     document.getElementById('orderQtyLegs').textContent =
-      `Per 1 lot entered → ${dirLbl} ${fmtStrike(legs.singleStrike)} ${typeLbl} (${legs.singleExpiry}) × qty, and ${oppLbl} ${fmtStrike(legs.ratioStrike)} ${typeLbl} (${legs.ratioExpiry}) × qty×${legs.ratio}. Both legs go as MARKET orders on Delta.`;
+      `BUY leg fires FIRST: ${fmtStrike(buySide.strike)} ${typeLbl} (${buySide.expiry}) × qty${buySide.mult!==1?'×'+buySide.mult:''}. `+
+      `Then SELL leg (sized off the buy's actual fill): ${fmtStrike(sellSide.strike)} ${typeLbl} (${sellSide.expiry}) × qty${sellSide.mult!==1?'×'+sellSide.mult:''}. `+
+      `Both are plain MARKET orders — but before either fires, the live orderbook is checked for enough depth within the band % below; if not enough, that order is refused rather than placed blind. No auto-unwind — if the sell leg doesn't fully fill, you'll get a loud warning to act on manually.`;
   } else {
     document.getElementById('orderQtyLegs').textContent = '';
   }
@@ -2335,38 +2355,40 @@ async function submitSpreadOrder(){
   const ratioSize = Math.max(1, Math.round(qty * legs.ratio));
   const leg1 = { symbol: legs.singleRow.symbol, side: legs.buySingle ? 'buy' : 'sell', size: qty };
   const leg2 = { symbol: legs.ratioRow.symbol, side: legs.buySingle ? 'sell' : 'buy', size: ratioSize };
+  const depthBandPct = (parseFloat(document.getElementById('orderSlippageInput').value) || 1.0) / 100;
 
   const btn = document.getElementById('orderQtyConfirmBtn');
   const original = btn.textContent;
-  btn.textContent = 'Placing…';
+  btn.textContent = 'Placing buy leg…';
   btn.disabled = true;
   try{
     const res = await fetch(LIVE.backendUrl.replace(/\/$/, '') + '/api/place-spread', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'X-App-Secret': LIVE.appSecret },
-      body: JSON.stringify({ leg1, leg2 }),
+      body: JSON.stringify({ leg1, leg2, ratio: legs.ratio, depth_band_pct: depthBandPct }),
     });
     const data = await res.json();
+    // backend ALWAYS returns leg1 = the buy result, leg2 = the sell result,
+    // regardless of how the request's leg1/leg2 were labelled
+    const buyLeg = data.leg1, sellLeg = data.leg2;
     if(data.ok){
-      showTradeToast(legs.dirParam, `LIVE ${legs.dirParam==='buy'?'BUY':'SELL'} placed: ${qty}x ${fmtStrike(legs.singleStrike)} + ${ratioSize}x ${fmtStrike(legs.ratioStrike)} ${legs.side.toUpperCase()}`);
-      // record the executed position into the payoff draft too, using
-      // actual filled qty, so it's tracked alongside your other legs
-      const priceFor = (row, wantBuy) => {
-        const fb = row.ltp ?? row.mark ?? ((row.bid!=null&&row.ask!=null)?(row.bid+row.ask)/2:0) ?? 0;
-        return wantBuy ? (row.ask ?? fb) : (row.bid ?? fb);
-      };
-      const singlePremium = priceFor(legs.singleRow, legs.buySingle);
-      const ratioPremium = priceFor(legs.ratioRow, !legs.buySingle);
-      tradePayoffLeg(legs.side, legs.singleStrike, legs.singleExpiry, singlePremium||0, legs.buySingle ? qty : -qty);
-      tradePayoffLeg(legs.side, legs.ratioStrike, legs.ratioExpiry, ratioPremium||0, legs.buySingle ? -ratioSize : ratioSize);
-      closeOrderQtyModal();
+      const fillTxt = (buyLeg&&sellLeg) ? ` — filled ${buyLeg.filled_size}@${buyLeg.avg_price ?? '?'} / ${sellLeg.filled_size}@${sellLeg.avg_price ?? '?'}` : '';
+      showTradeToast(legs.dirParam, `LIVE ${legs.dirParam==='buy'?'BUY':'SELL'} spread executed${fillTxt}${data.warning ? ' ⚠ '+data.warning : ''}`);
+      // record the ACTUAL fills (real qty + real avg price from Delta) into
+      // the payoff draft for tracking, not an estimate
+      const buyIsSingle = legs.buySingle;
+      const singleFill = buyIsSingle ? buyLeg : sellLeg;
+      const ratioFill = buyIsSingle ? sellLeg : buyLeg;
+      tradePayoffLeg(legs.side, legs.singleStrike, legs.singleExpiry, singleFill.avg_price || 0, buyIsSingle ? singleFill.filled_size : -singleFill.filled_size);
+      tradePayoffLeg(legs.side, legs.ratioStrike, legs.ratioExpiry, ratioFill.avg_price || 0, buyIsSingle ? -ratioFill.filled_size : ratioFill.filled_size);
+      if(!data.warning) closeOrderQtyModal();
+      else { errEl.textContent = '⚠ ' + data.warning; errEl.style.display = 'block'; }
     } else {
-      const l1 = data.leg1, l2 = data.leg2;
       const detail = [
-        l1 ? `Leg1(${l1.symbol}): ${l1.ok ? 'OK' : (l1.error || JSON.stringify(l1.response))}` : '',
-        l2 ? `Leg2(${l2.symbol}): ${l2.ok ? 'OK' : (l2.error || JSON.stringify(l2.response))}` : '',
+        buyLeg ? `Buy(${buyLeg.symbol}): ${buyLeg.ok ? `filled ${buyLeg.filled_size}` : (buyLeg.error || 'failed')}` : '',
+        sellLeg ? `Sell(${sellLeg.symbol}): ${sellLeg.ok ? `filled ${sellLeg.filled_size}` : (sellLeg.error || 'failed')}` : '',
       ].filter(Boolean).join(' · ');
-      errEl.textContent = (data.error || 'Order failed.') + (detail ? ' — ' + detail : '') + (data.warning ? ' ' + data.warning : '');
+      errEl.textContent = (data.error || 'Order failed.') + (detail ? ' — ' + detail : '');
       errEl.style.display = 'block';
     }
   } catch(e){
@@ -2482,6 +2504,38 @@ document.getElementById('acctCloseBtn').addEventListener('click', ()=>{
 });
 document.getElementById('accountInfoOverlay').addEventListener('click', (e)=>{
   if(e.target.id === 'accountInfoOverlay') document.getElementById('accountInfoOverlay').classList.remove('open');
+});
+
+// ---- order audit log panel ----
+async function loadOrderLog(){
+  const body = document.getElementById('orderLogBody');
+  if(!LIVE.backendUrl || !LIVE.appSecret){
+    body.textContent = 'Live order backend not configured — click "🔴 Live orders" first.';
+    return;
+  }
+  body.textContent = 'Loading…';
+  try{
+    const res = await fetch(LIVE.backendUrl.replace(/\/$/, '') + '/api/order-log?n=100', {
+      headers: { 'X-App-Secret': LIVE.appSecret },
+    });
+    const data = await res.json();
+    if(!data.ok){ body.textContent = 'Error: ' + (data.error || 'unknown'); return; }
+    if(!data.entries.length){ body.textContent = 'No order attempts logged yet.'; return; }
+    body.textContent = data.entries.slice().reverse().map(e=>JSON.stringify(e)).join('\n\n');
+  } catch(e){
+    body.textContent = 'Network/backend error: ' + e.message;
+  }
+}
+document.getElementById('orderLogBtn').addEventListener('click', ()=>{
+  document.getElementById('orderLogOverlay').classList.add('open');
+  loadOrderLog();
+});
+document.getElementById('orderLogRefreshBtn').addEventListener('click', loadOrderLog);
+document.getElementById('orderLogCloseBtn').addEventListener('click', ()=>{
+  document.getElementById('orderLogOverlay').classList.remove('open');
+});
+document.getElementById('orderLogOverlay').addEventListener('click', (e)=>{
+  if(e.target.id === 'orderLogOverlay') document.getElementById('orderLogOverlay').classList.remove('open');
 });
 
 // Toast notifications for actions whose visual context (like a spread

@@ -4,13 +4,14 @@ import hmac
 import hashlib
 import json
 import threading
+from datetime import datetime, timezone
 
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 import requests
 
 app = Flask(__name__)
-CORS(app)  # tighten to your GitHub Pages origin once live, if you want (see note at bottom)
+CORS(app)
 
 BASE_URL = "https://api.india.delta.exchange"
 
@@ -19,10 +20,36 @@ API_KEY = os.environ.get("DELTA_API_KEY", "")
 API_SECRET = os.environ.get("DELTA_API_SECRET", "")
 APP_SECRET = os.environ.get("APP_SECRET", "")  # shared secret between the dashboard and this backend
 
-_product_cache = {}
+# tunables
+DEFAULT_DEPTH_BAND_PCT = float(os.environ.get("DEPTH_BAND_PCT", "1.0")) / 100.0  # price band used ONLY to evaluate "is there enough depth nearby" -- not attached to the order itself
+MAX_LOT_SIZE = int(os.environ.get("MAX_LOT_SIZE", "500"))                        # server-side fat-finger ceiling
+FILL_POLL_ATTEMPTS = 6
+FILL_POLL_DELAY = 0.15   # seconds between order-status polls (market orders resolve almost instantly)
+SELL_LEG_RETRIES = 2
+
+_product_cache = {}      # symbol -> {id, tick_size}
 _cache_lock = threading.Lock()
 
+AUDIT_LOG_PATH = os.path.join(os.path.dirname(__file__), "order_audit.log")
+_audit_lock = threading.Lock()
 
+
+def audit(event, **fields):
+    """Append-only audit trail of every order attempt/result. Lives on
+    Render's local (ephemeral) disk -- it survives normal operation but is
+    wiped on a redeploy/instance replace. Good enough for same-session
+    debugging; for permanent history, ship these lines to Supabase later."""
+    entry = {"ts": datetime.now(timezone.utc).isoformat(), "event": event, **fields}
+    line = json.dumps(entry, default=str)
+    try:
+        with _audit_lock, open(AUDIT_LOG_PATH, "a") as f:
+            f.write(line + "\n")
+    except Exception:
+        pass  # never let logging failure block a trade
+    return entry
+
+
+# ==================== Delta auth / request helpers ====================
 def _sign(method, path, query, body):
     ts = str(int(time.time()))
     payload = method + ts + path + query + body
@@ -30,18 +57,14 @@ def _sign(method, path, query, body):
     return ts, sig
 
 
-def _delta_get(path, params=None):
+def _delta_get(path, params=None, signed=True):
     query = ""
     if params:
         query = "?" + "&".join(f"{k}={v}" for k, v in params.items())
-    ts, sig = _sign("GET", path, query, "")
-    headers = {
-        "api-key": API_KEY,
-        "timestamp": ts,
-        "signature": sig,
-        "Content-Type": "application/json",
-        "Accept": "application/json",
-    }
+    headers = {"Content-Type": "application/json", "Accept": "application/json"}
+    if signed:
+        ts, sig = _sign("GET", path, query, "")
+        headers.update({"api-key": API_KEY, "timestamp": ts, "signature": sig})
     r = requests.get(BASE_URL + path + query, headers=headers, timeout=10)
     try:
         return r.status_code, r.json()
@@ -49,22 +72,12 @@ def _delta_get(path, params=None):
         return r.status_code, {"success": False, "error": r.text}
 
 
-_fx_cache = {"rate": None, "ts": 0}
-
-
-def get_usd_inr_rate():
-    return 85.0
-
-
 def _delta_post(path, body_dict):
     body = json.dumps(body_dict)
     ts, sig = _sign("POST", path, "", body)
     headers = {
-        "api-key": API_KEY,
-        "timestamp": ts,
-        "signature": sig,
-        "Content-Type": "application/json",
-        "Accept": "application/json",
+        "api-key": API_KEY, "timestamp": ts, "signature": sig,
+        "Content-Type": "application/json", "Accept": "application/json",
     }
     r = requests.post(BASE_URL + path, data=body, headers=headers, timeout=10)
     try:
@@ -73,43 +86,172 @@ def _delta_post(path, body_dict):
         return r.status_code, {"success": False, "error": r.text}
 
 
-def get_product_id(symbol):
-    """Resolve a Delta option symbol (e.g. 'C-BTC-70000-280826') to its numeric
-    product_id, which the order endpoint requires. Cached in memory so repeat
-    trades on the same strike don't re-fetch every time."""
+def _delta_delete(path, body_dict):
+    body = json.dumps(body_dict)
+    ts, sig = _sign("DELETE", path, "", body)
+    headers = {
+        "api-key": API_KEY, "timestamp": ts, "signature": sig,
+        "Content-Type": "application/json", "Accept": "application/json",
+    }
+    r = requests.delete(BASE_URL + path, data=body, headers=headers, timeout=10)
+    try:
+        return r.status_code, r.json()
+    except Exception:
+        return r.status_code, {"success": False, "error": r.text}
+
+
+def get_usd_inr_rate():
+    return 85.0
+
+
+# ==================== product / ticker helpers ====================
+def get_product(symbol):
+    """Resolve a Delta option symbol to {id, tick_size}. Cached in memory."""
     with _cache_lock:
         if symbol in _product_cache:
             return _product_cache[symbol]
-    res = requests.get(
-        f"{BASE_URL}/v2/products/{symbol}",
-        headers={"Accept": "application/json"},
-        timeout=10,
-    )
+    res = requests.get(f"{BASE_URL}/v2/products/{symbol}",
+                        headers={"Accept": "application/json"}, timeout=10)
     data = res.json()
     if not data.get("success"):
         raise ValueError(f"Could not resolve product for symbol {symbol}: {data}")
-    pid = data["result"]["id"]
+    r = data["result"]
+    info = {"id": r["id"], "tick_size": float(r.get("tick_size") or 0.5)}
     with _cache_lock:
-        _product_cache[symbol] = pid
-    return pid
+        _product_cache[symbol] = info
+    return info
 
 
-def place_market_order(symbol, side, size):
+def get_orderbook(symbol):
+    """Delta's L2 orderbook: {'buy': [{price, size}, ...], 'sell': [{price, size}, ...]}
+    each already sorted best-price-first. Public endpoint, no auth needed."""
+    res = requests.get(f"{BASE_URL}/v2/l2orderbook/{symbol}",
+                        headers={"Accept": "application/json"}, timeout=10)
+    data = res.json()
+    if not data.get("success"):
+        raise ValueError(f"Could not fetch orderbook for {symbol}: {data}")
+    return data["result"]
+
+
+def check_depth(symbol, side, size, band_pct):
+    """For a SELL order, liquidity comes from the book's BUY side (bids);
+    for a BUY order, liquidity comes from the book's SELL side (asks).
+    Sums size across price levels within band_pct of the best price on that
+    side -- this band exists ONLY to decide "is there real depth nearby",
+    it is never sent to Delta as a limit price. The order placed afterwards
+    is a plain market order with no price restriction."""
+    book = get_orderbook(symbol)
+    levels = book.get("buy" if side == "sell" else "sell") or []
+    if not levels:
+        return {"available": 0, "best_price": None, "levels_checked": 0}
+    best_price = float(levels[0]["price"])
+    if side == "sell":
+        cutoff = best_price * (1 - band_pct)
+        in_band = [l for l in levels if float(l["price"]) >= cutoff]
+    else:
+        cutoff = best_price * (1 + band_pct)
+        in_band = [l for l in levels if float(l["price"]) <= cutoff]
+    available = sum(float(l.get("size", 0)) for l in in_band)
+    return {"available": available, "best_price": best_price, "levels_checked": len(in_band)}
+
+
+def round_to_tick(price, tick_size):
+    if not tick_size:
+        return round(price, 2)
+    return round(round(price / tick_size) * tick_size, 8)
+
+
+# ==================== depth-checked market order placement ====================
+def place_market_leg(symbol, side, size, band_pct=DEFAULT_DEPTH_BAND_PCT):
+    """1) Checks L2 orderbook depth near the best price BEFORE placing anything
+          -- if the book can't realistically absorb `size`, the order is never
+          sent at all.
+       2) If depth is sufficient, places a plain MARKET order (no limit price).
+       3) Polls the order status afterwards so the returned fill size/price are
+          the REAL executed values, not an assumption."""
     try:
-        product_id = get_product_id(symbol)
+        product = get_product(symbol)
     except Exception as e:
-        return {"symbol": symbol, "ok": False, "error": str(e)}
+        return {"symbol": symbol, "ok": False, "filled_size": 0, "error": f"product lookup failed: {e}"}
+
+    try:
+        depth = check_depth(symbol, side, size, band_pct)
+    except Exception as e:
+        return {"symbol": symbol, "ok": False, "filled_size": 0, "error": f"orderbook lookup failed: {e}"}
+
+    if depth["available"] < size:
+        return {
+            "symbol": symbol, "ok": False, "filled_size": 0,
+            "error": (
+                f"Insufficient orderbook depth: only {depth['available']:.0f} lots available "
+                f"within {band_pct*100:.1f}% of best price ({depth['best_price']}), "
+                f"but {size} lots requested. Order NOT placed."
+            ),
+            "depth_available": depth["available"], "depth_checked_pct": band_pct * 100,
+        }
+
     body = {
-        "product_id": product_id,
+        "product_id": product["id"],
         "size": int(size),
-        "side": side,          # "buy" or "sell"
+        "side": side,
         "order_type": "market_order",
     }
+    audit("order_attempt", symbol=symbol, side=side, size=size, depth_available=depth["available"])
     status, data = _delta_post("/v2/orders", body)
-    ok = bool(data.get("success"))
-    return {"symbol": symbol, "ok": ok, "status": status, "response": data}
+    if not data.get("success"):
+        audit("order_reject", symbol=symbol, side=side, response=data)
+        return {"symbol": symbol, "ok": False, "filled_size": 0, "error": data.get("error"), "response": data}
+
+    result = data.get("result", {})
+    order_id = result.get("id")
+
+    # reconcile: poll actual order state instead of trusting the initial ack
+    filled_size, avg_price, state = 0, None, result.get("state")
+    for _ in range(FILL_POLL_ATTEMPTS):
+        st, odata = _delta_get(f"/v2/orders/{order_id}")
+        if odata.get("success"):
+            r = odata.get("result", {})
+            state = r.get("state")
+            filled_size = int(r.get("size", 0)) - int(r.get("unfilled_size", r.get("size", 0)))
+            avg_price = r.get("average_fill_price")
+            if state in ("closed", "cancelled", "filled"):
+                break
+        time.sleep(FILL_POLL_DELAY)
+
+    ok = filled_size > 0
+    leg_result = {
+        "symbol": symbol, "ok": ok, "order_id": order_id,
+        "requested_size": int(size), "filled_size": filled_size,
+        "unfilled_size": int(size) - filled_size,
+        "avg_price": avg_price, "state": state,
+        "depth_available_precheck": depth["available"],
+    }
+    audit("order_result", **leg_result)
+    return leg_result
+    return leg_result
 
 
+# NOTE: auto-unwind was intentionally removed per instruction. If the buy
+# (hedge) leg fails to fully cover the sell leg, the resulting naked short is
+# now surfaced as a loud error in place_spread() instead of being silently
+# auto-squared-off. Manage it manually on Delta if it happens.
+
+
+# ==================== margin precheck ====================
+def get_available_balance():
+    st, data = _delta_get("/v2/wallet/balances")
+    if not data.get("success"):
+        return None, data.get("error")
+    total_avail = 0.0
+    for a in data.get("result", []):
+        try:
+            total_avail += float(a.get("available_balance") or 0)
+        except (TypeError, ValueError):
+            continue
+    return total_avail, None
+
+
+# ==================== routes ====================
 @app.route("/api/health")
 def health():
     return jsonify({
@@ -119,6 +261,20 @@ def health():
     })
 
 
+@app.route("/api/order-log")
+def order_log():
+    if not APP_SECRET or request.headers.get("X-App-Secret") != APP_SECRET:
+        return jsonify({"ok": False, "error": "unauthorized"}), 401
+    n = int(request.args.get("n", 100))
+    try:
+        with open(AUDIT_LOG_PATH) as f:
+            lines = f.readlines()[-n:]
+        entries = [json.loads(l) for l in lines]
+    except FileNotFoundError:
+        entries = []
+    return jsonify({"ok": True, "entries": entries})
+
+
 @app.route("/api/account-info", methods=["GET"])
 def account_info():
     if not APP_SECRET or request.headers.get("X-App-Secret") != APP_SECRET:
@@ -126,7 +282,6 @@ def account_info():
     if not API_KEY or not API_SECRET:
         return jsonify({"ok": False, "error": "Delta API credentials not configured on server"}), 500
 
-    # ---- balances ----
     bal_status, bal_data = _delta_get("/v2/wallet/balances")
     balances = []
     net_equity_usd = None
@@ -140,12 +295,7 @@ def account_info():
             if bal == 0 and avail == 0:
                 continue
             balances.append({
-                "asset": a.get("asset_symbol"),
-                "balance": bal,
-                "available_balance": avail,
-                "blocked_margin": a.get("blocked_margin"),
-                "position_margin": a.get("position_margin"),
-                "order_margin": a.get("order_margin"),
+                "asset": a.get("asset_symbol"), "balance": bal, "available_balance": avail,
             })
         meta = bal_data.get("meta") or {}
         try:
@@ -156,10 +306,6 @@ def account_info():
     usd_inr = get_usd_inr_rate()
     net_equity_inr = (net_equity_usd * usd_inr) if (net_equity_usd is not None and usd_inr) else None
 
-    # ---- margin mode ----
-    # Best-effort: exact path isn't fully confirmed from public docs. If this
-    # 404s / errors, we report "unknown" instead of guessing, and surface the
-    # raw error so it can be corrected quickly.
     margin_mode = None
     margin_mode_error = None
     for candidate_path in ("/v2/users/margin_mode", "/v2/profile"):
@@ -175,8 +321,11 @@ def account_info():
     if not margin_mode:
         margin_mode = "unknown"
 
-    # ---- positions (across the underlyings this dashboard trades) ----
-    positions = []
+    # positions: Delta's underlying_asset_symbol filter was returning the
+    # full position list regardless of value, causing duplicates when we
+    # looped per-underlying -- so fetch once and dedupe by symbol to be safe
+    # either way.
+    positions_by_symbol = {}
     positions_error = None
     for underlying in ("BTC", "ETH", "XAUT"):
         st, data = _delta_get("/v2/positions/margined", {"underlying_asset_symbol": underlying})
@@ -188,15 +337,14 @@ def account_info():
                     size = 0
                 if size == 0:
                     continue
-                positions.append({
-                    "symbol": p.get("product_symbol") or p.get("symbol"),
-                    "size": size,
-                    "entry_price": p.get("entry_price"),
-                    "mark_price": p.get("mark_price"),
+                sym = p.get("product_symbol") or p.get("symbol")
+                positions_by_symbol[sym] = {
+                    "symbol": sym, "size": size,
+                    "entry_price": p.get("entry_price"), "mark_price": p.get("mark_price"),
                     "liquidation_price": p.get("liquidation_price"),
                     "unrealized_pnl": p.get("unrealized_pnl") or p.get("unrealized_cashflow"),
                     "margin": p.get("margin"),
-                })
+                }
         elif positions_error is None:
             positions_error = data.get("error")
 
@@ -208,51 +356,111 @@ def account_info():
         "usd_inr_rate": usd_inr,
         "margin_mode": margin_mode,
         "margin_mode_note": None if margin_mode != "unknown" else f"Could not confirm via API ({margin_mode_error}) — check Delta app: Portfolio tab.",
-        "positions": positions,
+        "positions": list(positions_by_symbol.values()),
         "positions_note": positions_error,
     })
 
 
 @app.route("/api/place-spread", methods=["POST"])
 def place_spread():
-    # simple shared-secret gate so random people who find this URL can't fire
-    # orders on your account -- this is NOT the Delta key, it's your own passphrase
     if not APP_SECRET or request.headers.get("X-App-Secret") != APP_SECRET:
         return jsonify({"ok": False, "error": "unauthorized"}), 401
-
     if not API_KEY or not API_SECRET:
         return jsonify({"ok": False, "error": "Delta API credentials not configured on server"}), 500
 
     data = request.get_json(force=True, silent=True) or {}
     leg1 = data.get("leg1")
     leg2 = data.get("leg2")
+    ratio = float(data.get("ratio", 1))
+    depth_band_pct = float(data.get("depth_band_pct", DEFAULT_DEPTH_BAND_PCT))
+
     if not leg1 or not leg2:
         return jsonify({"ok": False, "error": "leg1 and leg2 are required"}), 400
     for leg in (leg1, leg2):
         if not leg.get("symbol") or leg.get("side") not in ("buy", "sell") or not leg.get("size"):
             return jsonify({"ok": False, "error": f"bad leg payload: {leg}"}), 400
 
-    results = [None, None]
+    # normalise so buy_leg/sell_leg are clear regardless of which one the
+    # frontend labelled "leg1"/"leg2"
+    buy_leg = leg1 if leg1["side"] == "buy" else leg2
+    sell_leg = leg2 if leg1["side"] == "buy" else leg1
 
-    def run(i, leg):
-        results[i] = place_market_order(leg["symbol"], leg["side"], leg["size"])
+    # fat-finger ceiling (server-side, independent of the frontend's own check)
+    if buy_leg["size"] > MAX_LOT_SIZE or sell_leg["size"] > MAX_LOT_SIZE:
+        return jsonify({"ok": False, "error": f"size exceeds server safety ceiling of {MAX_LOT_SIZE} lots — refusing to place. Raise MAX_LOT_SIZE env var if this is intentional."}), 400
 
-    t1 = threading.Thread(target=run, args=(0, leg1))
-    t2 = threading.Thread(target=run, args=(1, leg2))
-    t1.start()
-    t2.start()
-    t1.join(timeout=20)
-    t2.join(timeout=20)
+    audit("spread_request", buy_leg=buy_leg, sell_leg=sell_leg, ratio=ratio)
 
-    leg1_ok = bool(results[0] and results[0].get("ok"))
-    leg2_ok = bool(results[1] and results[1].get("ok"))
+    # ---- margin precheck (soft) ----
+    # NOTE: this is NOT a precise margin calculator -- Delta's real margin
+    # formula for multi-leg options portfolios is complex and not something
+    # we recompute here. This only catches the obvious case of an empty/near
+    # -empty wallet before risking a partial-fill situation.
+    avail, bal_err = get_available_balance()
+    if avail is not None and avail <= 0:
+        audit("margin_precheck_block", available_balance=avail)
+        return jsonify({"ok": False, "error": "Available balance is ₹0/$0 (or could not be confirmed positive) — refusing to place any leg. Check your Delta wallet."}), 400
 
-    return jsonify({
-        "ok": leg1_ok and leg2_ok,
-        "leg1": results[0],
-        "leg2": results[1],
-        "warning": None if (leg1_ok and leg2_ok) else "One leg may have failed while the other filled — check your Delta positions immediately.",
-    })
+    # ---- leg 1: BUY fires FIRST (uses less/no margin) ----
+    # If this fails, nothing has happened yet -- clean abort, nothing to
+    # unwind. If leg 2 (sell) later fails, the leftover position is a
+    # bounded-risk naked LONG (worst case: lose the premium already paid),
+    # not an uncovered short -- the safer failure mode to be left holding.
+    buy_result = place_market_leg(buy_leg["symbol"], "buy", buy_leg["size"], depth_band_pct)
+    if not buy_result["ok"]:
+        return jsonify({
+            "ok": False, "leg1": buy_result, "leg2": None,
+            "error": "Buy leg did not fill (or insufficient orderbook depth) — no position taken, sell leg was not attempted.",
+        })
+
+    # size the sell leg proportionally to whatever fraction of the buy
+    # actually filled (handles partial fills cleanly, keeps the ratio intact)
+    fill_fraction = buy_result["filled_size"] / buy_leg["size"]
+    sell_size = max(1, round(sell_leg["size"] * fill_fraction))
+
+    # ---- leg 2: SELL fires SECOND, with retries (margin-gated side) ----
+    sell_result = None
+    for attempt in range(SELL_LEG_RETRIES + 1):
+        sell_result = place_market_leg(sell_leg["symbol"], "sell", sell_size, depth_band_pct)
+        if sell_result["ok"]:
+            break
+
+    if not sell_result or sell_result["filled_size"] == 0:
+        # No auto-unwind (by design, per instruction). Leftover position is
+        # the buy leg alone -- a naked long, bounded risk -- but still flag
+        # it clearly so it gets looked at.
+        return jsonify({
+            "ok": False, "leg1": buy_result, "leg2": sell_result,
+            "error": (
+                f"Sell leg failed after retries (insufficient margin, thin book, or rejected). "
+                f"You have a naked LONG position of {buy_result['filled_size']} lots on {buy_leg['symbol']} "
+                f"left over from the buy leg. Auto-unwind is disabled — review manually."
+            ),
+        })
+
+    if sell_result["filled_size"] < sell_size:
+        return jsonify({
+            "ok": True, "leg1": buy_result, "leg2": sell_result,
+            "warning": f"Sell leg partially filled ({sell_result['filled_size']}/{sell_size}); ratio vs the buy leg is now mismatched — review positions manually.",
+        })
+
+    return jsonify({"ok": True, "leg1": buy_result, "leg2": sell_result, "warning": None})
+
+
+# ==================== keep-alive (best-effort, use UptimeRobot as primary) ====================
+def _self_ping_loop():
+    url = os.environ.get("RENDER_EXTERNAL_URL")
+    if not url:
+        return
+    while True:
+        time.sleep(240)  # ~4 min, under Render's 15 min inactivity sleep threshold
+        try:
+            requests.get(url.rstrip("/") + "/api/health", timeout=8)
+        except Exception:
+            pass
+
+
+threading.Thread(target=_self_ping_loop, daemon=True).start()
 
 
 if __name__ == "__main__":
