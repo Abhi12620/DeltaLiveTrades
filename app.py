@@ -469,6 +469,15 @@ def account_info():
     # either way.
     positions_by_symbol = {}
     positions_error = None
+    risk_by_underlying = {}  # e.g. "BTC" -> {margin, initial_margin, maintenance_margin, delta, theta, vega, gamma}
+
+    def underlying_of(symbol):
+        # option/future symbols look like "C-BTC-78000-280826" or "BTCUSD"
+        for u in ("BTC", "ETH", "XAUT"):
+            if u in (symbol or ""):
+                return u
+        return "OTHER"
+
     for underlying in ("BTC", "ETH", "XAUT"):
         st, data = _delta_get("/v2/positions/margined", {"underlying_asset_symbol": underlying})
         if data.get("success"):
@@ -480,13 +489,55 @@ def account_info():
                 if size == 0:
                     continue
                 sym = p.get("product_symbol") or p.get("symbol")
+                margin_val = p.get("margin")
                 positions_by_symbol[sym] = {
                     "symbol": sym, "size": size,
                     "entry_price": p.get("entry_price"), "mark_price": p.get("mark_price"),
                     "liquidation_price": p.get("liquidation_price"),
                     "unrealized_pnl": p.get("unrealized_pnl") or p.get("unrealized_cashflow"),
-                    "margin": p.get("margin"),
+                    "margin": margin_val,
                 }
+
+                coin = underlying_of(sym)
+                bucket = risk_by_underlying.setdefault(coin, {
+                    "margin": 0.0, "initial_margin": 0.0, "maintenance_margin": 0.0,
+                    "delta": 0.0, "theta": 0.0, "vega": 0.0, "gamma": 0.0,
+                    "fields_available": {"initial_margin": False, "maintenance_margin": False, "greeks": False},
+                })
+                try:
+                    bucket["margin"] += float(margin_val or 0)
+                except (TypeError, ValueError):
+                    pass
+                # opportunistic: these exact field names aren't publicly confirmed
+                # in Delta's docs, so only used if actually present
+                if p.get("initial_margin") is not None:
+                    try:
+                        bucket["initial_margin"] += float(p["initial_margin"])
+                        bucket["fields_available"]["initial_margin"] = True
+                    except (TypeError, ValueError):
+                        pass
+                if p.get("maintenance_margin") is not None:
+                    try:
+                        bucket["maintenance_margin"] += float(p["maintenance_margin"])
+                        bucket["fields_available"]["maintenance_margin"] = True
+                    except (TypeError, ValueError):
+                        pass
+
+                # portfolio greeks: per-contract greeks come from the ticker,
+                # scaled by this position's signed size
+                try:
+                    tst, tdata = _delta_get(f"/v2/tickers/{sym}", signed=False)
+                    if tdata.get("success"):
+                        g = (tdata.get("result") or {}).get("greeks") or {}
+                        if g:
+                            bucket["fields_available"]["greeks"] = True
+                            for greek in ("delta", "theta", "vega", "gamma"):
+                                try:
+                                    bucket[greek] += float(g.get(greek) or 0) * size
+                                except (TypeError, ValueError):
+                                    pass
+                except Exception:
+                    pass
         elif positions_error is None:
             positions_error = data.get("error")
 
@@ -500,6 +551,8 @@ def account_info():
         "margin_mode_note": None if margin_mode != "unknown" else f"Could not confirm via API ({margin_mode_error}) — check Delta app: Portfolio tab.",
         "positions": list(positions_by_symbol.values()),
         "positions_note": positions_error,
+        "risk_by_underlying": risk_by_underlying,
+        "risk_note": "Best-effort reconstruction from position + ticker data — Delta's exact Initial/Maintenance Margin split isn't in the public API docs, so those two may show '—' if the position object doesn't expose them directly. Position Margin and Greeks are computed live.",
     })
 
 

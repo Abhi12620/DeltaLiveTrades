@@ -290,6 +290,15 @@
   .acct-summary-row b{color:var(--text);}
   .acct-section-title{font-size:11px;color:var(--muted);font-weight:800;text-transform:uppercase;letter-spacing:.05em;margin:14px 0 4px;}
 
+  .log-table{width:100%;border-collapse:collapse;font-family:var(--mono);font-size:11px;}
+  .log-table th{text-align:left;color:var(--muted);font-weight:700;padding:5px 7px;border-bottom:1px solid var(--border);position:sticky;top:0;background:var(--surface);}
+  .log-table td{padding:6px 7px;border-bottom:1px solid var(--border);vertical-align:top;}
+  .log-badge{display:inline-block;padding:2px 7px;border-radius:5px;font-size:10px;font-weight:800;letter-spacing:.02em;white-space:nowrap;}
+  .log-badge.ok{background:rgba(60,190,120,.15);color:var(--call);}
+  .log-badge.err{background:rgba(242,84,91,.15);color:var(--put);}
+  .log-badge.info{background:var(--surface3);color:var(--muted);}
+  .log-raw{max-height:400px;overflow:auto;background:var(--surface3);border:1px solid var(--border);border-radius:7px;padding:10px;font-size:10.5px;line-height:1.5;white-space:pre-wrap;word-break:break-all;font-family:var(--mono);}
+
   /* ---- login gate ---- */
   #loginGate{position:fixed;inset:0;z-index:99999;background:var(--bg);display:flex;align-items:center;justify-content:center;padding:20px;}
   #loginGate.hidden{display:none;}
@@ -929,6 +938,7 @@
     <div id="acctSummary"></div>
     <div id="acctBalances"></div>
     <div id="acctPositions"></div>
+    <div id="acctRisk"></div>
     <div class="btnrow">
       <button class="test-btn" id="acctRefreshBtn">Refresh</button>
       <button id="acctCloseBtn">Close</button>
@@ -937,10 +947,15 @@
 </div>
 
 <div class="alert-popover-overlay" id="orderLogOverlay">
-  <div class="settings-modal" style="max-width:640px;">
+  <div class="settings-modal" style="max-width:760px;">
     <h4>Order audit log</h4>
     <p class="note">Every order attempt/result, logged server-side. Lives on Render's local disk — survives normal operation but resets on redeploy.</p>
-    <pre id="orderLogBody" style="max-height:340px;overflow:auto;background:var(--surface3);border:1px solid var(--border);border-radius:7px;padding:10px;font-size:10.5px;line-height:1.5;white-space:pre-wrap;word-break:break-all;"></pre>
+    <label class="trade-col-toggle" style="margin:6px 0 10px;">
+      <input type="checkbox" id="orderLogRawToggle">
+      <span class="tct-track"><span class="tct-thumb"></span></span>
+      <span class="tct-label">Show raw JSON instead</span>
+    </label>
+    <div id="orderLogBody" style="max-height:400px;overflow:auto;"></div>
     <div class="btnrow">
       <button class="test-btn" id="orderLogRefreshBtn">Refresh</button>
       <button id="orderLogCloseBtn">Close</button>
@@ -1434,7 +1449,7 @@ BUILDER_IDS.forEach(n=> document.getElementById(`spreadSpotLabel${n}`).textConte
 
 document.getElementById('refreshBtn').addEventListener('click', fetchSnapshot);
 document.getElementById('logoutBtn').addEventListener('click', ()=>{
-  if(confirm('Confirmed Logout?')) window.__oddLogout();
+  if(confirm('Logout ho jaayein?')) window.__oddLogout();
 });
 document.getElementById('pauseBtn').addEventListener('click', (e)=>{
   state.paused = !state.paused;
@@ -2532,13 +2547,14 @@ async function loadAccountInfo(){
   const summaryEl = document.getElementById('acctSummary');
   const balEl = document.getElementById('acctBalances');
   const posEl = document.getElementById('acctPositions');
+  const riskEl = document.getElementById('acctRisk');
   if(!LIVE.backendUrl || !LIVE.appSecret){
     statusEl.textContent = 'Live order backend not configured — click "🔴 Live orders" first.';
-    summaryEl.innerHTML = ''; balEl.innerHTML = ''; posEl.innerHTML = '';
+    summaryEl.innerHTML = ''; balEl.innerHTML = ''; posEl.innerHTML = ''; riskEl.innerHTML = '';
     return;
   }
   statusEl.textContent = 'Loading…';
-  summaryEl.innerHTML = ''; balEl.innerHTML = ''; posEl.innerHTML = '';
+  summaryEl.innerHTML = ''; balEl.innerHTML = ''; posEl.innerHTML = ''; riskEl.innerHTML = '';
   try{
     const res = await fetch(LIVE.backendUrl.replace(/\/$/, '') + '/api/account-info', {
       headers: { 'X-App-Secret': LIVE.appSecret },
@@ -2576,6 +2592,22 @@ async function loadAccountInfo(){
     }
     if(data.positions_note) posHtml += `<p class="note">${data.positions_note}</p>`;
     posEl.innerHTML = posHtml;
+
+    const fmt2 = n => n==null || isNaN(n) ? '—' : Number(n).toLocaleString(undefined,{maximumFractionDigits:2});
+    let riskHtml = '<div class="acct-section-title">Risk &amp; margin (by coin)</div>';
+    const coins = data.risk_by_underlying ? Object.keys(data.risk_by_underlying) : [];
+    if(coins.length){
+      riskHtml += '<table class="acct-table"><thead><tr><th>Coin</th><th>Position margin</th><th>Init. margin</th><th>Maint. margin</th><th>Delta</th><th>Theta</th><th>Vega</th><th>Gamma</th></tr></thead><tbody>' +
+        coins.map(c=>{
+          const r = data.risk_by_underlying[c];
+          const fa = r.fields_available || {};
+          return `<tr><td>${c}</td><td>${fmt2(r.margin)}</td><td>${fa.initial_margin ? fmt2(r.initial_margin) : '—'}</td><td>${fa.maintenance_margin ? fmt2(r.maintenance_margin) : '—'}</td><td>${fmt2(r.delta)}</td><td>${fmt2(r.theta)}</td><td>${fmt2(r.vega)}</td><td>${fmt2(r.gamma)}</td></tr>`;
+        }).join('') + '</tbody></table>';
+    } else {
+      riskHtml += '<p class="note">No open positions to compute risk for.</p>';
+    }
+    if(data.risk_note) riskHtml += `<p class="note" style="margin-top:6px;">${data.risk_note}</p>`;
+    riskEl.innerHTML = riskHtml;
   } catch(e){
     statusEl.textContent = 'Network/backend error: ' + e.message;
   }
@@ -2593,25 +2625,71 @@ document.getElementById('accountInfoOverlay').addEventListener('click', (e)=>{
 });
 
 // ---- order audit log panel ----
+function summarizeLogEntry(e){
+  const f = e; // shorthand
+  switch(e.event){
+    case 'spread_request':
+      return { badge:['info','REQUEST'], symbol:'', side:'', detail:`BUY ${f.buy_leg?.symbol} ×${f.buy_leg?.size}  →  SELL ${f.sell_leg?.symbol} ×${f.sell_leg?.size}  (ratio ${f.ratio})` };
+    case 'precheck_fail':
+      return { badge:['err','DEPTH FAIL'], symbol:'', side:'', detail:`BUY avail ${f.buy_precheck?.available ?? '?'} · SELL avail ${f.sell_precheck?.available ?? '?'} — nothing placed` };
+    case 'margin_precheck_block':
+      return { badge:['err','MARGIN BLOCK'], symbol:'', side:'', detail:`Available balance ${f.available_balance} — refused` };
+    case 'kill_switch_block':
+      return { badge:['err','KILL SWITCH'], symbol:'', side:'', detail:'All orders blocked (kill switch is ON)' };
+    case 'order_attempt':
+      return { badge:['info','ATTEMPT'], symbol:f.symbol, side:f.side, detail:`size ${f.size} · depth avail ${f.depth_available ?? '?'}` };
+    case 'order_reject':
+      return { badge:['err','REJECTED'], symbol:f.symbol, side:f.side, detail: JSON.stringify(f.response?.error || f.response || '').slice(0,140) };
+    case 'order_result':
+      return { badge:[f.ok?'ok':'err', f.ok?'FILLED':'NO FILL'], symbol:f.symbol, side:f.side, detail:`${f.filled_size}/${f.requested_size} @ ${f.avg_price ?? '—'} (${f.state ?? '?'})` };
+    case 'dry_run_order':
+      return { badge:['ok','🧪 DRY-RUN'], symbol:f.symbol, side:f.side, detail:`simulated ${f.filled_size}/${f.requested_size} @ ${f.avg_price ?? '—'}` };
+    case 'inter_leg_delay':
+      return { badge:['info','DELAY'], symbol:'', side:'', detail:`${f.delay_ms}ms pause before sell leg` };
+    case 'settings_updated':
+      return { badge:['info','SETTINGS'], symbol:'', side:'', detail: JSON.stringify(f.settings).slice(0,140) };
+    default:
+      return { badge:['info', e.event?.toUpperCase() || 'EVENT'], symbol:f.symbol||'', side:f.side||'', detail: JSON.stringify(f).slice(0,140) };
+  }
+}
 async function loadOrderLog(){
   const body = document.getElementById('orderLogBody');
   if(!LIVE.backendUrl || !LIVE.appSecret){
-    body.textContent = 'Live order backend not configured — click "🔴 Live orders" first.';
+    body.innerHTML = '<p class="note">Live order backend not configured — click "🔴 Live orders" first.</p>';
     return;
   }
-  body.textContent = 'Loading…';
+  body.innerHTML = '<p class="note">Loading…</p>';
   try{
-    const res = await fetch(LIVE.backendUrl.replace(/\/$/, '') + '/api/order-log?n=100', {
+    const res = await fetch(LIVE.backendUrl.replace(/\/$/, '') + '/api/order-log?n=150', {
       headers: { 'X-App-Secret': LIVE.appSecret },
     });
     const data = await res.json();
-    if(!data.ok){ body.textContent = 'Error: ' + (data.error || 'unknown'); return; }
-    if(!data.entries.length){ body.textContent = 'No order attempts logged yet.'; return; }
-    body.textContent = data.entries.slice().reverse().map(e=>JSON.stringify(e)).join('\n\n');
+    if(!data.ok){ body.innerHTML = `<p class="note">Error: ${data.error || 'unknown'}</p>`; return; }
+    if(!data.entries.length){ body.innerHTML = '<p class="note">No order attempts logged yet.</p>'; return; }
+    const entries = data.entries.slice().reverse();
+
+    if(document.getElementById('orderLogRawToggle').checked){
+      body.innerHTML = `<div class="log-raw">${entries.map(e=>JSON.stringify(e)).join('\n\n')}</div>`;
+      return;
+    }
+
+    const rows = entries.map(e=>{
+      const s = summarizeLogEntry(e);
+      const t = e.ts ? new Date(e.ts).toLocaleTimeString() : '—';
+      return `<tr>
+        <td>${t}</td>
+        <td><span class="log-badge ${s.badge[0]}">${s.badge[1]}</span></td>
+        <td>${s.symbol||''}</td>
+        <td style="color:${s.side==='buy'?'var(--call)':s.side==='sell'?'var(--put)':'inherit'};">${s.side||''}</td>
+        <td>${s.detail}</td>
+      </tr>`;
+    }).join('');
+    body.innerHTML = `<table class="log-table"><thead><tr><th>Time</th><th>Event</th><th>Symbol</th><th>Side</th><th>Detail</th></tr></thead><tbody>${rows}</tbody></table>`;
   } catch(e){
-    body.textContent = 'Network/backend error: ' + e.message;
+    body.innerHTML = `<p class="note">Network/backend error: ${e.message}</p>`;
   }
 }
+document.getElementById('orderLogRawToggle').addEventListener('change', loadOrderLog);
 document.getElementById('orderLogBtn').addEventListener('click', ()=>{
   document.getElementById('orderLogOverlay').classList.add('open');
   loadOrderLog();
