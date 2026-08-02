@@ -20,12 +20,36 @@ API_KEY = os.environ.get("DELTA_API_KEY", "")
 API_SECRET = os.environ.get("DELTA_API_SECRET", "")
 APP_SECRET = os.environ.get("APP_SECRET", "")  # shared secret between the dashboard and this backend
 
-# tunables
-DEFAULT_DEPTH_BAND_PCT = float(os.environ.get("DEPTH_BAND_PCT", "1.0")) / 100.0  # price band used ONLY to evaluate "is there enough depth nearby" -- not attached to the order itself
-MAX_LOT_SIZE = int(os.environ.get("MAX_LOT_SIZE", "500"))                        # server-side fat-finger ceiling
+# ---- tunables: runtime-editable via /api/settings, persisted to a local
+# JSON file so they survive without needing a Render redeploy. Env vars are
+# only the FIRST-TIME defaults (used if the settings file doesn't exist yet).
 FILL_POLL_ATTEMPTS = 6
 FILL_POLL_DELAY = 0.15   # seconds between order-status polls (market orders resolve almost instantly)
 SELL_LEG_RETRIES = 2
+
+SETTINGS_PATH = os.path.join(os.path.dirname(__file__), "settings.json")
+_settings_lock = threading.Lock()
+_DEFAULT_SETTINGS = {
+    "max_lot_size": int(os.environ.get("MAX_LOT_SIZE", "500")),
+    "depth_band_pct": float(os.environ.get("DEPTH_BAND_PCT", "1.0")),  # stored as a PERCENT (e.g. 1.0 = 1%)
+}
+
+
+def load_settings():
+    with _settings_lock:
+        try:
+            with open(SETTINGS_PATH) as f:
+                s = json.load(f)
+            return {**_DEFAULT_SETTINGS, **s}
+        except Exception:
+            return dict(_DEFAULT_SETTINGS)
+
+
+def save_settings(new_settings):
+    with _settings_lock:
+        with open(SETTINGS_PATH, "w") as f:
+            json.dump(new_settings, f)
+
 
 _product_cache = {}      # symbol -> {id, tick_size}
 _cache_lock = threading.Lock()
@@ -162,13 +186,15 @@ def round_to_tick(price, tick_size):
 
 
 # ==================== depth-checked market order placement ====================
-def place_market_leg(symbol, side, size, band_pct=DEFAULT_DEPTH_BAND_PCT):
+def place_market_leg(symbol, side, size, band_pct=None):
     """1) Checks L2 orderbook depth near the best price BEFORE placing anything
           -- if the book can't realistically absorb `size`, the order is never
           sent at all.
        2) If depth is sufficient, places a plain MARKET order (no limit price).
        3) Polls the order status afterwards so the returned fill size/price are
           the REAL executed values, not an assumption."""
+    if band_pct is None:
+        band_pct = load_settings()["depth_band_pct"] / 100.0
     try:
         product = get_product(symbol)
     except Exception as e:
@@ -259,6 +285,37 @@ def health():
         "delta_key_configured": bool(API_KEY and API_SECRET),
         "app_secret_configured": bool(APP_SECRET),
     })
+
+
+@app.route("/api/settings", methods=["GET", "POST"])
+def settings_endpoint():
+    if not APP_SECRET or request.headers.get("X-App-Secret") != APP_SECRET:
+        return jsonify({"ok": False, "error": "unauthorized"}), 401
+
+    if request.method == "GET":
+        return jsonify({"ok": True, "settings": load_settings()})
+
+    data = request.get_json(force=True, silent=True) or {}
+    current = load_settings()
+    if "max_lot_size" in data:
+        try:
+            v = int(data["max_lot_size"])
+            if v <= 0:
+                raise ValueError()
+            current["max_lot_size"] = v
+        except (ValueError, TypeError):
+            return jsonify({"ok": False, "error": "max_lot_size must be a positive integer"}), 400
+    if "depth_band_pct" in data:
+        try:
+            v = float(data["depth_band_pct"])
+            if v <= 0:
+                raise ValueError()
+            current["depth_band_pct"] = v
+        except (ValueError, TypeError):
+            return jsonify({"ok": False, "error": "depth_band_pct must be a positive number"}), 400
+    save_settings(current)
+    audit("settings_updated", settings=current)
+    return jsonify({"ok": True, "settings": current})
 
 
 @app.route("/api/order-log")
@@ -388,7 +445,8 @@ def place_spread():
     leg1 = data.get("leg1")
     leg2 = data.get("leg2")
     ratio = float(data.get("ratio", 1))
-    depth_band_pct = float(data.get("depth_band_pct", DEFAULT_DEPTH_BAND_PCT))
+    settings = load_settings()
+    depth_band_pct = float(data.get("depth_band_pct", settings["depth_band_pct"] / 100.0))
 
     if not leg1 or not leg2:
         return jsonify({"ok": False, "error": "leg1 and leg2 are required"}), 400
@@ -402,8 +460,8 @@ def place_spread():
     sell_leg = leg2 if leg1["side"] == "buy" else leg1
 
     # fat-finger ceiling (server-side, independent of the frontend's own check)
-    if buy_leg["size"] > MAX_LOT_SIZE or sell_leg["size"] > MAX_LOT_SIZE:
-        return jsonify({"ok": False, "error": f"size exceeds server safety ceiling of {MAX_LOT_SIZE} lots — refusing to place. Raise MAX_LOT_SIZE env var if this is intentional."}), 400
+    if buy_leg["size"] > settings["max_lot_size"] or sell_leg["size"] > settings["max_lot_size"]:
+        return jsonify({"ok": False, "error": f"size exceeds server safety ceiling of {settings['max_lot_size']} lots — refusing to place. Change this in the dashboard's Trade Params panel."}), 400
 
     audit("spread_request", buy_leg=buy_leg, sell_leg=sell_leg, ratio=ratio)
 

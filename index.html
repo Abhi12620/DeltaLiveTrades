@@ -497,8 +497,8 @@
 </div>
 <script>
 (function(){
-  var AUTH_ID = 'AbhishekGol';
-  var AUTH_PASS = 'Abhi@242897D';
+  var AUTH_ID = 'ADMIN';
+  var AUTH_PASS = '102030';
   var gate = document.getElementById('loginGate');
   if(sessionStorage.getItem('odd_auth') === 'true'){ gate.classList.add('hidden'); return; }
   function tryLogin(){
@@ -665,6 +665,7 @@
       <button class="alert-settings-btn" id="liveTradeSettingsBtn" title="Configure live order execution backend">🔴 Live orders</button>
       <button class="alert-settings-btn" id="accountInfoBtn" title="Live Delta balance, margin mode, positions">📊 Account</button>
       <button class="alert-settings-btn" id="orderLogBtn" title="Audit trail of every order attempt">🧾 Order log</button>
+      <button class="alert-settings-btn" id="tradeParamsBtn" title="Fat-finger, depth-check band, and other live-order safety settings — no redeploy needed">⚙️ Trade Params</button>
     </div>
     <div id="spreadBuildersRoot"></div>
   </div>
@@ -943,6 +944,34 @@
     <div class="btnrow">
       <button class="test-btn" id="orderLogRefreshBtn">Refresh</button>
       <button id="orderLogCloseBtn">Close</button>
+    </div>
+  </div>
+</div>
+
+<div class="alert-popover-overlay" id="tradeParamsOverlay">
+  <div class="settings-modal" style="max-width:460px;">
+    <h4>Trade parameters</h4>
+    <p class="note">These apply instantly — no code edit, no redeploy, no cache-clearing needed. The two server-side values sync live to your Render backend via the "Sync to server" button; everything else is local to this browser.</p>
+
+    <div class="acct-section-title">Order safety — synced to backend</div>
+    <label>Fat-finger HARD BLOCK (max lots per leg)</label>
+    <input type="number" id="tpMaxLotSize" min="1" step="1">
+    <p class="note" style="margin:2px 0 8px;">Orders above this are refused server-side — no confirmation can override it.</p>
+
+    <label>Default depth-check band %</label>
+    <input type="number" id="tpDepthBandPct" min="0.1" step="0.1">
+    <p class="note" style="margin:2px 0 8px;">How far from the best price the orderbook depth precheck looks, before either leg is placed.</p>
+
+    <div class="acct-section-title">Order safety — local to this browser</div>
+    <label>Fat-finger WARNING threshold (lots)</label>
+    <input type="number" id="tpWarnLotSize" min="1" step="1">
+    <p class="note" style="margin:2px 0 0;">Above this, a confirm popup appears before placing — but it can still be confirmed through.</p>
+
+    <p class="note" id="tpStatus" style="margin-top:10px;"></p>
+    <div class="btnrow">
+      <button class="test-btn" id="tpSyncBtn">Sync to server</button>
+      <button class="save-btn" id="tpSaveBtn">Save</button>
+      <button id="tpCloseBtn">Close</button>
     </div>
   </div>
 </div>
@@ -1380,7 +1409,7 @@ BUILDER_IDS.forEach(n=> document.getElementById(`spreadSpotLabel${n}`).textConte
 
 document.getElementById('refreshBtn').addEventListener('click', fetchSnapshot);
 document.getElementById('logoutBtn').addEventListener('click', ()=>{
-  if(confirm('Confirmed Logout?')) window.__oddLogout();
+  if(confirm('Logout ho jaayein?')) window.__oddLogout();
 });
 document.getElementById('pauseBtn').addEventListener('click', (e)=>{
   state.paused = !state.paused;
@@ -2374,7 +2403,8 @@ async function submitSpreadOrder(){
   const stillAwake = await ensureBackendAwake(setBackendStatus);
   if(!stillAwake) return;
   // fat-finger guard on unusually large lot sizes
-  if(qty > 5 && !confirm(`⚠ Fat-finger check: you're about to place a LIVE order for ${qty} lots (base leg) — more than 5. Confirm this is correct?`)){
+  const fatFingerThreshold = parseInt(localStorage.getItem('doc_fatfinger_warn_lots') || '100', 10);
+  if(qty > fatFingerThreshold && !confirm(`⚠ Fat-finger check: you're about to place a LIVE order for ${qty} lots (base leg) — more than ${fatFingerThreshold}. Confirm this is correct?`)){
     return;
   }
   const legs = currentOrderCtx;
@@ -2564,6 +2594,85 @@ document.getElementById('orderLogCloseBtn').addEventListener('click', ()=>{
 });
 document.getElementById('orderLogOverlay').addEventListener('click', (e)=>{
   if(e.target.id === 'orderLogOverlay') document.getElementById('orderLogOverlay').classList.remove('open');
+});
+
+// ---- trade parameters panel: fat-finger, depth-band, etc. -- all apply
+// instantly, no code edit / redeploy / cache-clear needed ----
+async function openTradeParams(){
+  document.getElementById('tpWarnLotSize').value = localStorage.getItem('doc_fatfinger_warn_lots') || '100';
+  document.getElementById('tpDepthBandPct').value = localStorage.getItem('doc_depth_band_pct') || '1.0';
+  document.getElementById('tpStatus').textContent = '';
+  document.getElementById('tradeParamsOverlay').classList.add('open');
+  if(LIVE.backendUrl && LIVE.appSecret){
+    try{
+      const res = await fetch(LIVE.backendUrl.replace(/\/$/, '') + '/api/settings', {
+        headers: { 'X-App-Secret': LIVE.appSecret },
+      });
+      const data = await res.json();
+      if(data.ok){
+        document.getElementById('tpMaxLotSize').value = data.settings.max_lot_size;
+        document.getElementById('tpDepthBandPct').value = data.settings.depth_band_pct;
+        localStorage.setItem('doc_depth_band_pct', data.settings.depth_band_pct);
+      } else {
+        document.getElementById('tpStatus').textContent = 'Could not load server settings: ' + (data.error || 'unknown');
+      }
+    } catch(e){
+      document.getElementById('tpStatus').textContent = 'Could not reach backend to load current server settings: ' + e.message;
+    }
+  } else {
+    document.getElementById('tpStatus').textContent = 'Backend not configured yet ("🔴 Live orders") — showing local values only; max-lot-size can\'t be synced until it is.';
+  }
+}
+document.getElementById('tradeParamsBtn').addEventListener('click', openTradeParams);
+document.getElementById('tpCloseBtn').addEventListener('click', ()=>{
+  document.getElementById('tradeParamsOverlay').classList.remove('open');
+});
+document.getElementById('tradeParamsOverlay').addEventListener('click', (e)=>{
+  if(e.target.id === 'tradeParamsOverlay') document.getElementById('tradeParamsOverlay').classList.remove('open');
+});
+document.getElementById('tpSaveBtn').addEventListener('click', ()=>{
+  const warn = parseInt(document.getElementById('tpWarnLotSize').value, 10);
+  const band = parseFloat(document.getElementById('tpDepthBandPct').value);
+  if(!warn || warn <= 0 || !band || band <= 0){
+    document.getElementById('tpStatus').textContent = 'Enter valid positive numbers.';
+    return;
+  }
+  localStorage.setItem('doc_fatfinger_warn_lots', warn);
+  localStorage.setItem('doc_depth_band_pct', band);
+  document.getElementById('tpStatus').textContent = '✓ Saved locally — applies to your next order immediately.';
+});
+document.getElementById('tpSyncBtn').addEventListener('click', async ()=>{
+  if(!LIVE.backendUrl || !LIVE.appSecret){
+    document.getElementById('tpStatus').textContent = 'Configure the backend URL + app secret in "🔴 Live orders" first.';
+    return;
+  }
+  const maxLot = parseInt(document.getElementById('tpMaxLotSize').value, 10);
+  const band = parseFloat(document.getElementById('tpDepthBandPct').value);
+  if(!maxLot || maxLot <= 0 || !band || band <= 0){
+    document.getElementById('tpStatus').textContent = 'Enter valid positive numbers.';
+    return;
+  }
+  const btn = document.getElementById('tpSyncBtn');
+  const original = btn.textContent;
+  btn.textContent = 'Syncing…';
+  try{
+    const res = await fetch(LIVE.backendUrl.replace(/\/$/, '') + '/api/settings', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-App-Secret': LIVE.appSecret },
+      body: JSON.stringify({ max_lot_size: maxLot, depth_band_pct: band }),
+    });
+    const data = await res.json();
+    if(data.ok){
+      localStorage.setItem('doc_depth_band_pct', data.settings.depth_band_pct);
+      document.getElementById('tpStatus').textContent = `✓ Synced to server — hard block now ${data.settings.max_lot_size} lots, depth band ${data.settings.depth_band_pct}%.`;
+    } else {
+      document.getElementById('tpStatus').textContent = 'Sync failed: ' + (data.error || 'unknown');
+    }
+  } catch(e){
+    document.getElementById('tpStatus').textContent = 'Network/backend error: ' + e.message;
+  } finally {
+    btn.textContent = original;
+  }
 });
 
 // Toast notifications for actions whose visual context (like a spread
