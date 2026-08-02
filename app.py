@@ -361,6 +361,22 @@ def account_info():
     })
 
 
+def precheck_leg(symbol, side, size, band_pct):
+    """Warms the product-id cache AND checks orderbook depth for one leg.
+    Meant to be run in parallel (one thread per leg) so both legs' prechecks
+    finish in max(t_buy, t_sell) instead of t_buy + t_sell, and so BOTH
+    sides are known-fillable (or not) before either order is committed --
+    catching a doomed trade upfront instead of discovering it only after
+    the buy leg has already gone through."""
+    try:
+        get_product(symbol)  # warms cache, used again during actual placement
+        depth = check_depth(symbol, side, size, band_pct)
+    except Exception as e:
+        return {"symbol": symbol, "ok": False, "available": 0, "error": str(e)}
+    ok = depth["available"] >= size
+    return {"symbol": symbol, "ok": ok, "available": depth["available"], "best_price": depth["best_price"]}
+
+
 @app.route("/api/place-spread", methods=["POST"])
 def place_spread():
     if not APP_SECRET or request.headers.get("X-App-Secret") != APP_SECRET:
@@ -400,6 +416,35 @@ def place_spread():
     if avail is not None and avail <= 0:
         audit("margin_precheck_block", available_balance=avail)
         return jsonify({"ok": False, "error": "Available balance is ₹0/$0 (or could not be confirmed positive) — refusing to place any leg. Check your Delta wallet."}), 400
+
+    # ---- parallel precheck (both legs at once) ----
+    # Resolves product IDs (cache warm-up) and checks orderbook depth for
+    # BOTH legs simultaneously, using each leg's requested/nominal size.
+    # If either side clearly can't be filled, we abort here -- before firing
+    # even the buy leg -- instead of discovering the sell side is doomed
+    # only after already taking the buy position.
+    precheck_results = [None, None]
+
+    def run_precheck(i, leg):
+        precheck_results[i] = precheck_leg(leg["symbol"], leg["side"], leg["size"], depth_band_pct)
+
+    t1 = threading.Thread(target=run_precheck, args=(0, buy_leg))
+    t2 = threading.Thread(target=run_precheck, args=(1, sell_leg))
+    t1.start(); t2.start()
+    t1.join(timeout=15); t2.join(timeout=15)
+    buy_precheck, sell_precheck = precheck_results[0], precheck_results[1]
+
+    if not (buy_precheck and buy_precheck["ok"]) or not (sell_precheck and sell_precheck["ok"]):
+        audit("precheck_fail", buy_precheck=buy_precheck, sell_precheck=sell_precheck)
+        problems = []
+        if not (buy_precheck and buy_precheck["ok"]):
+            problems.append(f"BUY {buy_leg['symbol']}: only {buy_precheck['available']:.0f} lots depth available (need {buy_leg['size']})" if buy_precheck else "BUY precheck failed")
+        if not (sell_precheck and sell_precheck["ok"]):
+            problems.append(f"SELL {sell_leg['symbol']}: only {sell_precheck['available']:.0f} lots depth available (need {sell_leg['size']})" if sell_precheck else "SELL precheck failed")
+        return jsonify({
+            "ok": False, "leg1": None, "leg2": None,
+            "error": "Insufficient orderbook depth on at least one leg — nothing was placed. " + " · ".join(problems),
+        })
 
     # ---- leg 1: BUY fires FIRST (uses less/no margin) ----
     # If this fails, nothing has happened yet -- clean abort, nothing to

@@ -274,6 +274,15 @@
   .alert-list-item{display:flex;align-items:center;justify-content:space-between;gap:8px;border:1px solid var(--border);border-radius:7px;padding:8px 10px;margin-top:8px;font-family:var(--mono);font-size:12px;}
   .alert-list-item .rm{color:#f2545b;cursor:pointer;font-weight:800;padding:0 4px;}
 
+  .order-spec{border:1px solid var(--border);border-radius:8px;padding:10px 12px;background:var(--surface3);font-family:var(--mono);}
+  .order-spec-row{display:flex;justify-content:space-between;align-items:baseline;padding:3px 0;font-size:12.5px;}
+  .order-spec-row .side-tag{font-weight:800;letter-spacing:.03em;margin-right:8px;}
+  .order-spec-row .side-tag.buy{color:var(--call);}
+  .order-spec-row .side-tag.sell{color:var(--put);}
+  .order-spec-row .val{text-align:right;color:var(--text);}
+  .order-spec-divider{border-top:1px dashed var(--border);margin:5px 0;}
+  .order-field-label{display:block;font-size:11px;color:var(--muted);font-weight:800;text-transform:uppercase;letter-spacing:.05em;margin:12px 0 4px;}
+
   .acct-table{width:100%;border-collapse:collapse;margin-top:8px;font-family:var(--mono);font-size:11.5px;}
   .acct-table th{text-align:left;color:var(--muted);font-weight:700;padding:4px 6px;border-bottom:1px solid var(--border);}
   .acct-table td{padding:5px 6px;border-bottom:1px solid var(--border);}
@@ -870,19 +879,27 @@
 </div>
 
 <div class="alert-popover-overlay" id="orderQtyOverlay">
-  <div class="alert-popover">
+  <div class="alert-popover" style="max-width:380px;">
     <h4 id="orderQtyTitle">Place spread order</h4>
-    <p class="note" id="orderQtyLegs" style="color:var(--muted);font-size:11.5px;margin-bottom:10px;line-height:1.5;"></p>
-    <p class="note" id="orderQtyBackendStatus" style="font-size:11.5px;margin-bottom:10px;"></p>
+
+    <div class="order-spec" id="orderQtySpec"></div>
+
+    <p class="note" id="orderQtyBackendStatus" style="font-size:11.5px;margin:10px 0;"></p>
+
+    <label class="order-field-label">Lots (base leg)</label>
     <div class="row">
-      <input type="number" id="orderQtyInput" placeholder="lots e.g. 100" min="1" step="1">
+      <input type="number" id="orderQtyInput" placeholder="e.g. 100" min="1" step="1">
     </div>
+    <label class="order-field-label">Depth-check band % <span style="font-weight:400;text-transform:none;color:var(--muted);">(stays fixed until you change it)</span></label>
     <div class="row">
-      <input type="number" id="orderSlippageInput" placeholder="depth-check band % (default 1.0)" min="0.1" step="0.1" value="1.0">
+      <input type="number" id="orderSlippageInput" min="0.1" step="0.1" value="1.0">
     </div>
-    <p class="note" id="orderQtyErr" style="color:var(--put);display:none;margin-bottom:8px;"></p>
+
+    <p class="note" style="font-size:10.5px;margin-top:10px;line-height:1.4;">Plain market orders. Orderbook depth is checked for both legs before anything is placed. No auto-unwind — if the sell leg doesn't fully fill, you'll get a loud warning to act on manually.</p>
+
+    <p class="note" id="orderQtyErr" style="color:var(--put);display:none;margin-top:8px;"></p>
     <div class="btnrow">
-      <button class="save-btn" id="orderQtyConfirmBtn">Place order (buy leg first)</button>
+      <button class="save-btn" id="orderQtyConfirmBtn">Place order</button>
       <button class="cancel-btn" id="orderQtyCancelBtn">Cancel</button>
     </div>
   </div>
@@ -2251,22 +2268,31 @@ function openOrderQtyModal(params){
   const dirLbl = params.dir==='buy' ? 'BUY' : 'SELL';
   const oppLbl = params.dir==='buy' ? 'SELL' : 'BUY';
   document.getElementById('orderQtyTitle').textContent = `${dirLbl} spread: ${fmtStrike(params.s1)}/${params.s2!==null && !isNaN(params.s2) ? fmtStrike(params.s2) : '—'} (${typeLbl})`;
+  const specEl = document.getElementById('orderQtySpec');
   if(legs){
     const buySide = legs.buySingle ? {strike:legs.singleStrike,expiry:legs.singleExpiry,mult:1} : {strike:legs.ratioStrike,expiry:legs.ratioExpiry,mult:legs.ratio};
     const sellSide = legs.buySingle ? {strike:legs.ratioStrike,expiry:legs.ratioExpiry,mult:legs.ratio} : {strike:legs.singleStrike,expiry:legs.singleExpiry,mult:1};
-    document.getElementById('orderQtyLegs').textContent =
-      `BUY leg fires FIRST: ${fmtStrike(buySide.strike)} ${typeLbl} (${buySide.expiry}) × qty${buySide.mult!==1?'×'+buySide.mult:''}. `+
-      `Then SELL leg (sized off the buy's actual fill): ${fmtStrike(sellSide.strike)} ${typeLbl} (${sellSide.expiry}) × qty${sellSide.mult!==1?'×'+sellSide.mult:''}. `+
-      `Both are plain MARKET orders — but before either fires, the live orderbook is checked for enough depth within the band % below; if not enough, that order is refused rather than placed blind. No auto-unwind — if the sell leg doesn't fully fill, you'll get a loud warning to act on manually.`;
+    const ratioDisp = (buySide.mult!==1?buySide.mult:sellSide.mult);
+    specEl.innerHTML = `
+      <div class="order-spec-row"><span><span class="side-tag buy">BUY</span>${fmtStrike(buySide.strike)} ${typeLbl}</span><span class="val">${buySide.expiry}${buySide.mult!==1?' · ×'+buySide.mult:''}</span></div>
+      <div class="order-spec-row"><span><span class="side-tag sell">SELL</span>${fmtStrike(sellSide.strike)} ${typeLbl}</span><span class="val">${sellSide.expiry}${sellSide.mult!==1?' · ×'+sellSide.mult:''}</span></div>
+      <div class="order-spec-divider"></div>
+      <div class="order-spec-row"><span>Ratio</span><span class="val">1 : ${ratioDisp}</span></div>
+    `;
   } else {
-    document.getElementById('orderQtyLegs').textContent = '';
+    specEl.innerHTML = '';
   }
   document.getElementById('orderQtyInput').value = '';
+  // depth-check band % is "sticky" -- reuse whatever was last set, until changed
+  document.getElementById('orderSlippageInput').value = localStorage.getItem('doc_depth_band_pct') || '1.0';
   document.getElementById('orderQtyOverlay').classList.add('open');
   document.getElementById('orderQtyInput').focus();
   setBackendStatus('checking', 'Checking backend…');
   ensureBackendAwake(setBackendStatus);
 }
+document.getElementById('orderSlippageInput').addEventListener('change', (e)=>{
+  localStorage.setItem('doc_depth_band_pct', e.target.value);
+});
 function closeOrderQtyModal(){
   document.getElementById('orderQtyOverlay').classList.remove('open');
   currentOrderCtx = null;
@@ -2348,14 +2374,16 @@ async function submitSpreadOrder(){
   const stillAwake = await ensureBackendAwake(setBackendStatus);
   if(!stillAwake) return;
   // fat-finger guard on unusually large lot sizes
-  if(qty >= 50 && !confirm(`Confirm: place LIVE order for ${qty} lots (base leg)? This cannot be undone.`)){
+  if(qty > 100 && !confirm(`⚠ Fat-finger check: you're about to place a LIVE order for ${qty} lots (base leg) — more than 100. Confirm this is correct?`)){
     return;
   }
   const legs = currentOrderCtx;
   const ratioSize = Math.max(1, Math.round(qty * legs.ratio));
   const leg1 = { symbol: legs.singleRow.symbol, side: legs.buySingle ? 'buy' : 'sell', size: qty };
   const leg2 = { symbol: legs.ratioRow.symbol, side: legs.buySingle ? 'sell' : 'buy', size: ratioSize };
-  const depthBandPct = (parseFloat(document.getElementById('orderSlippageInput').value) || 1.0) / 100;
+  const depthBandInputVal = document.getElementById('orderSlippageInput').value;
+  localStorage.setItem('doc_depth_band_pct', depthBandInputVal);
+  const depthBandPct = (parseFloat(depthBandInputVal) || 1.0) / 100;
 
   const btn = document.getElementById('orderQtyConfirmBtn');
   const original = btn.textContent;
