@@ -497,6 +497,167 @@
     .deck-toggle button{padding:9px 14px;font-size:12px;}
     .side-panel-body{flex-direction:column;}
   }
+
+  /* ==================================================================
+     FRONTEND REFRESH — toolbar buttons + settings panels (styling only)
+     Pure presentation overrides. No markup/JS/logic dependencies.
+     ================================================================== */
+
+  /* ---- toolbar: grouped toolstrip ---- */
+  #spreadGlobalBar{gap:8px;flex-wrap:wrap;align-items:center;}
+  .alert-settings-btn{
+    display:inline-flex;align-items:center;gap:6px;
+    border:1px solid var(--border);
+    background:linear-gradient(180deg,var(--surface2),var(--surface));
+    color:var(--text);font-family:var(--sans);font-weight:700;
+    font-size:12px;letter-spacing:-.1px;padding:7px 12px;border-radius:10px;
+    cursor:pointer;box-shadow:var(--shadow-sm);
+    transition:transform .12s ease,border-color .15s ease,box-shadow .15s ease,color .15s ease;
+  }
+  .alert-settings-btn:hover{
+    color:var(--text);border-color:var(--accent);
+    transform:translateY(-1px);
+    box-shadow:0 4px 14px -6px rgba(0,0,0,.55), inset 0 0 0 9999px var(--accent-dim);
+  }
+  .alert-settings-btn:active{transform:translateY(0);}
+  .alert-settings-btn:focus-visible{outline:2px solid var(--accent);outline-offset:2px;}
+  #liveTradeSettingsBtn:hover{border-color:var(--put);box-shadow:0 4px 14px -6px rgba(0,0,0,.55), inset 0 0 0 9999px var(--put-dim);}
+  #tradeParamsBtn:hover{border-color:var(--atm);box-shadow:0 4px 14px -6px rgba(0,0,0,.55), inset 0 0 0 9999px var(--atm-dim);}
+  .toolbar-badge{border-radius:999px;padding:4px 10px;letter-spacing:.03em;}
+
+  /* ---- overlay ---- */
+  .alert-popover-overlay{background:rgba(0,0,0,.62);backdrop-filter:blur(3px);}
+  .alert-popover-overlay.open .settings-modal,
+  .alert-popover-overlay.open .alert-popover{animation:modalPop .18s ease-out;}
+  @keyframes modalPop{from{opacity:0;transform:translateY(8px) scale(.985);}to{opacity:1;transform:none;}}
+
+  /* ---- panel shell: sticky title, sticky action bar, scrolling body ---- */
+  .settings-modal,.alert-popover{
+    border-radius:16px;padding:0 0 0;
+    box-shadow:0 24px 70px -20px rgba(0,0,0,.7),0 2px 6px rgba(0,0,0,.35);
+    max-height:86vh;overflow:auto;scrollbar-width:thin;
+    background:var(--surface);padding:0 20px 18px;
+  }
+  .settings-modal::-webkit-scrollbar,.log-raw::-webkit-scrollbar,#orderLogBody::-webkit-scrollbar{width:9px;height:9px;}
+  .settings-modal::-webkit-scrollbar-thumb,.log-raw::-webkit-scrollbar-thumb,#orderLogBody::-webkit-scrollbar-thumb{background:var(--surface3);border-radius:9px;}
+  .settings-modal > h4,.alert-popover > h4{
+    position:sticky;top:0;z-index:3;margin:0 -20px 14px;padding:15px 20px 13px;
+    background:var(--surface);border-bottom:1px solid var(--border);
+    font-family:var(--sans);font-size:14.5px;font-weight:800;letter-spacing:-.2px;
+    display:flex;align-items:center;gap:8px;
+  }
+  .settings-modal > h4::before,.alert-popover > h4::before{
+    content:'';width:3px;height:15px;border-radius:3px;background:var(--accent);flex-shrink:0;
+  }
+  .settings-modal > .btnrow,.alert-popover > .btnrow{
+    position:sticky;bottom:0;z-index:3;margin:16px -20px -18px;padding:12px 20px;
+    background:var(--surface);border-top:1px solid var(--border);
+    display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;
+  }
+
+  /* ---- typography inside panels ---- */
+  .settings-modal p.note{color:var(--muted);font-size:11.5px;line-height:1.55;margin:0 0 12px;}
+  .settings-modal label:not(.trade-col-toggle),.order-field-label{
+    font-size:10px;color:var(--muted);font-weight:800;text-transform:uppercase;
+    letter-spacing:.07em;margin:12px 0 5px;
+  }
+  .acct-section-title{
+    display:flex;align-items:center;gap:8px;font-size:10px;letter-spacing:.09em;
+    color:var(--muted);margin:18px 0 8px;
+  }
+  .acct-section-title::after{content:'';flex:1;height:1px;background:var(--border);}
+
+  /* ---- inputs ---- */
+  .settings-modal input:not([type=checkbox]),
+  .alert-popover input:not([type=checkbox]),
+  .alert-popover select,
+  .settings-modal select{
+    background:var(--surface2);border:1px solid var(--border);border-radius:9px;
+    padding:9px 11px;transition:border-color .15s,box-shadow .15s;
+  }
+  .settings-modal input:not([type=checkbox]):focus,
+  .alert-popover input:not([type=checkbox]):focus,
+  .alert-popover select:focus,.settings-modal select:focus{
+    border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-dim);
+  }
+  .settings-modal input::placeholder,.alert-popover input::placeholder{color:var(--muted2);}
+
+  /* ---- buttons in panels ---- */
+  .settings-modal button,.alert-popover button{
+    border-radius:9px;padding:9px 15px;font-size:12.5px;font-weight:700;
+    transition:transform .12s,filter .15s,border-color .15s,color .15s;
+  }
+  .settings-modal button:hover,.alert-popover button:hover{transform:translateY(-1px);filter:brightness(1.08);}
+  .settings-modal button:active,.alert-popover button:active{transform:translateY(0);}
+  .settings-modal .save-btn,.alert-popover .save-btn{
+    background:linear-gradient(180deg,var(--accent),var(--accent2));
+    border-color:var(--accent2);color:#04110f;font-weight:800;
+    box-shadow:0 6px 16px -8px var(--accent);
+  }
+  .settings-modal .test-btn{border-color:var(--border);color:var(--accent);background:var(--surface2);}
+  .settings-modal .test-btn:hover,.settings-modal button:not(.save-btn):hover{border-color:var(--accent);color:var(--text);}
+  .alert-popover .remove-btn{border-color:rgba(242,84,91,.4);}
+  .alert-popover .btnrow{flex-wrap:nowrap;}
+  .alert-popover .btnrow button{flex:1;}
+
+  /* ---- alert list rows ---- */
+  .alert-list-item{
+    border-radius:10px;background:var(--surface2);border-color:var(--border-soft);
+    padding:9px 11px;font-size:11.5px;transition:border-color .15s;
+  }
+  .alert-list-item:hover{border-color:var(--accent);}
+  .alert-list-item .rm{
+    border-radius:6px;background:rgba(242,84,91,.12);width:20px;height:20px;
+    display:inline-flex;align-items:center;justify-content:center;font-size:13px;
+  }
+
+  /* ---- account panel ---- */
+  #acctSummary,#acctBalances,#acctPositions,#acctRisk{margin-top:2px;}
+  .acct-summary-row{
+    padding:7px 11px;border-radius:9px;background:var(--surface2);
+    margin-bottom:5px;font-size:12px;align-items:center;
+  }
+  .acct-summary-row b{font-weight:800;}
+  .acct-table{
+    border-collapse:separate;border-spacing:0;font-size:11.5px;
+    background:var(--surface2);border:1px solid var(--border-soft);border-radius:10px;overflow:hidden;
+  }
+  .acct-table th{
+    background:var(--surface3);font-size:9.5px;text-transform:uppercase;letter-spacing:.06em;
+    padding:7px 9px;border-bottom:1px solid var(--border);
+  }
+  .acct-table td{padding:7px 9px;border-bottom:1px solid var(--border-soft);}
+  .acct-table tr:last-child td{border-bottom:none;}
+  .acct-table tbody tr:hover td{background:var(--surface3);}
+
+  /* ---- order log ---- */
+  .settings-modal label.trade-col-toggle{display:flex;align-items:center;gap:9px;font-size:12px;color:var(--text);font-weight:700;text-transform:none;letter-spacing:0;margin:10px 0;}
+  #orderLogBody:not(:empty){
+    border:1px solid var(--border-soft);border-radius:10px;background:var(--surface2);
+    max-height:min(48vh,420px);
+  }
+  .log-table th{
+    background:var(--surface3);font-size:9.5px;text-transform:uppercase;letter-spacing:.06em;padding:8px 10px;
+  }
+  .log-table td{padding:8px 10px;font-size:11px;border-bottom:1px solid var(--border-soft);}
+  .log-table tbody tr:hover td{background:var(--surface3);}
+  .log-badge{border-radius:999px;padding:3px 9px;}
+  .log-raw{background:var(--surface2);border-radius:10px;}
+
+  /* ---- trade params / order spec ---- */
+  .tp-banner{border-radius:10px;padding:10px 13px;font-size:12px;}
+  .order-spec{border-radius:11px;background:var(--surface2);padding:11px 13px;border-color:var(--border-soft);}
+  .order-spec-row{font-size:12px;padding:4px 0;}
+
+  @media (max-width:640px){
+    .settings-modal,.alert-popover{max-height:92vh;border-radius:14px;padding:0 14px 14px;}
+    .settings-modal > h4,.alert-popover > h4{margin:0 -14px 12px;}
+    .settings-modal > .btnrow,.alert-popover > .btnrow{margin:14px -14px -14px;}
+    .alert-settings-btn{flex:1 1 auto;justify-content:center;}
+    .settings-modal > .btnrow,.alert-popover > .btnrow{padding:11px 14px;}
+    .settings-modal > h4,.alert-popover > h4{padding:13px 14px 11px;}
+  }
+
 </style>
 </head>
 <body data-theme="dark">
