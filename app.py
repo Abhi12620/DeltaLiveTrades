@@ -10,6 +10,13 @@ from flask import Flask, request, jsonify
 from flask_cors import CORS
 import requests
 
+# ---- shared HTTP session: reuses TCP+TLS connections to Delta across calls
+# instead of paying a fresh handshake (~50-150ms) on every single request.
+# With ~10-15 Delta API calls per order (mostly sequential by design), this
+# is pure upside -- no behavior change, just less time spent connecting.
+SESSION = requests.Session()
+SESSION.headers.update({"Accept": "application/json"})
+
 app = Flask(__name__)
 CORS(app)
 
@@ -58,6 +65,14 @@ _DEFAULT_SETTINGS = {
     "dry_run": False,            # if true, every check (margin/depth) still runs for real, but NO real order is sent to Delta -- fully simulated response instead
     "kill_switch": False,        # if true, /api/place-spread refuses everything immediately, no exceptions
     "sell_leg_retries": 2,       # how many extra attempts for the sell leg before giving up
+    "unwind_enabled": False,     # if true, a failed sell leg triggers an automatic opposite-side order to flatten the leftover buy leg. Off by default (per instruction) -- a naked long is a known, bounded-risk state; auto-unwinding trades that certainty for automatically closing the position at whatever price is available.
+    "circuit_breaker_threshold": 3,   # consecutive FAILED trades before kill_switch auto-flips on
+    "stale_data_max_seconds": 3.0,    # if an orderbook fetch takes longer than this, treat it as too stale/slow to trade on and refuse
+    "notify_on_success": True,
+    "notify_on_failure": True,
+    "notify_on_naked_position": True,
+    "notify_on_circuit_breaker": True,
+    "consecutive_failures": 0,   # internal state, not meant to be edited directly -- tracked by the circuit breaker
 }
 
 
@@ -99,6 +114,44 @@ def audit(event, **fields):
     return entry
 
 
+# ==================== Telegram notifications (backend-side) ====================
+# Separate from the dashboard's own price-alert Telegram bot -- this one
+# fires from the SERVER, so it works even if the dashboard tab is closed.
+# Set these as Render env vars (create a bot via @BotFather, same pattern as
+# the dashboard's alert bot -- can reuse the same bot/chat or use a new one).
+TG_BOT_TOKEN = os.environ.get("TG_BOT_TOKEN", "")
+TG_CHAT_ID = os.environ.get("TG_CHAT_ID", "")
+
+
+def send_telegram(text):
+    if not TG_BOT_TOKEN or not TG_CHAT_ID:
+        return False
+    try:
+        SESSION.post(
+            f"https://api.telegram.org/bot{TG_BOT_TOKEN}/sendMessage",
+            json={"chat_id": TG_CHAT_ID, "text": text},
+            timeout=8,
+        )
+        return True
+    except Exception:
+        return False
+
+
+_NOTIFY_SETTING_KEY = {
+    "success": "notify_on_success",
+    "failure": "notify_on_failure",
+    "naked_position": "notify_on_naked_position",
+    "circuit_breaker": "notify_on_circuit_breaker",
+}
+
+
+def notify_trade_outcome(kind, message, settings=None):
+    settings = settings or load_settings()
+    key = _NOTIFY_SETTING_KEY.get(kind)
+    if key and settings.get(key, True):
+        send_telegram(message)
+
+
 # ==================== Delta auth / request helpers ====================
 def _sign(method, path, query, body, api_secret):
     ts = str(int(time.time()))
@@ -116,7 +169,7 @@ def _delta_get(path, params=None, signed=True):
         api_key, api_secret = get_active_credentials()
         ts, sig = _sign("GET", path, query, "", api_secret)
         headers.update({"api-key": api_key, "timestamp": ts, "signature": sig})
-    r = requests.get(BASE_URL + path + query, headers=headers, timeout=10)
+    r = SESSION.get(BASE_URL + path + query, headers=headers, timeout=10)
     try:
         return r.status_code, r.json()
     except Exception:
@@ -131,7 +184,7 @@ def _delta_post(path, body_dict):
         "api-key": api_key, "timestamp": ts, "signature": sig,
         "Content-Type": "application/json", "Accept": "application/json",
     }
-    r = requests.post(BASE_URL + path, data=body, headers=headers, timeout=10)
+    r = SESSION.post(BASE_URL + path, data=body, headers=headers, timeout=10)
     try:
         return r.status_code, r.json()
     except Exception:
@@ -146,7 +199,7 @@ def _delta_delete(path, body_dict):
         "api-key": api_key, "timestamp": ts, "signature": sig,
         "Content-Type": "application/json", "Accept": "application/json",
     }
-    r = requests.delete(BASE_URL + path, data=body, headers=headers, timeout=10)
+    r = SESSION.delete(BASE_URL + path, data=body, headers=headers, timeout=10)
     try:
         return r.status_code, r.json()
     except Exception:
@@ -163,8 +216,8 @@ def get_product(symbol):
     with _cache_lock:
         if symbol in _product_cache:
             return _product_cache[symbol]
-    res = requests.get(f"{BASE_URL}/v2/products/{symbol}",
-                        headers={"Accept": "application/json"}, timeout=10)
+    res = SESSION.get(f"{BASE_URL}/v2/products/{symbol}",
+                       headers={"Accept": "application/json"}, timeout=10)
     data = res.json()
     if not data.get("success"):
         raise ValueError(f"Could not resolve product for symbol {symbol}: {data}")
@@ -175,11 +228,21 @@ def get_product(symbol):
     return info
 
 
-def get_orderbook(symbol):
+def get_orderbook(symbol, max_staleness_s=None):
     """Delta's L2 orderbook: {'buy': [{price, size}, ...], 'sell': [{price, size}, ...]}
-    each already sorted best-price-first. Public endpoint, no auth needed."""
-    res = requests.get(f"{BASE_URL}/v2/l2orderbook/{symbol}",
-                        headers={"Accept": "application/json"}, timeout=10)
+    each already sorted best-price-first. Public endpoint, no auth needed.
+    Also acts as a staleness guard: Delta doesn't expose a per-response
+    timestamp, so as a practical proxy we measure how long the request
+    itself took -- an unusually slow response (network hiccup, Delta-side
+    lag) is a sign the data we'd be trading on can't be trusted as "now"."""
+    if max_staleness_s is None:
+        max_staleness_s = load_settings().get("stale_data_max_seconds", 3.0)
+    t0 = time.time()
+    res = SESSION.get(f"{BASE_URL}/v2/l2orderbook/{symbol}",
+                       headers={"Accept": "application/json"}, timeout=10)
+    elapsed = time.time() - t0
+    if elapsed > max_staleness_s:
+        raise ValueError(f"orderbook response took {elapsed:.1f}s (> {max_staleness_s}s limit) — too slow/stale to trade on safely")
     data = res.json()
     if not data.get("success"):
         raise ValueError(f"Could not fetch orderbook for {symbol}: {data}")
@@ -298,10 +361,67 @@ def place_market_leg(symbol, side, size, band_pct=None, dry_run=False):
     return leg_result
 
 
-# NOTE: auto-unwind was intentionally removed per instruction. If the buy
-# (hedge) leg fails to fully cover the sell leg, the resulting naked short is
-# now surfaced as a loud error in place_spread() instead of being silently
-# auto-squared-off. Manage it manually on Delta if it happens.
+def unwind_leg(symbol, opposite_side, size, band_pct, dry_run):
+    """Optional (off by default -- toggle in Trade Params): fires an
+    immediate opposite-side protected order to flatten a leg left dangling
+    because its partner leg failed to fill. Uses a wider depth band since
+    getting OUT matters more than getting a great price here."""
+    audit("unwind_attempt", symbol=symbol, side=opposite_side, size=size)
+    result = place_market_leg(symbol, opposite_side, size, band_pct=max(band_pct * 3, 0.03), dry_run=dry_run)
+    audit("unwind_result", **result)
+    return result
+
+
+def get_position_size(symbol):
+    """Current live position size for a symbol (0 if flat, None if lookup failed).
+    Used for post-trade reconciliation -- confirms what we THINK happened
+    (based on order fill responses) matches what Delta's position ledger
+    actually shows."""
+    underlying = None
+    for u in ("BTC", "ETH", "XAUT"):
+        if u in (symbol or ""):
+            underlying = u
+            break
+    if not underlying:
+        return None
+    st, data = _delta_get("/v2/positions/margined", {"underlying_asset_symbol": underlying})
+    if not data.get("success"):
+        return None
+    for p in data.get("result", []) or []:
+        if (p.get("product_symbol") or p.get("symbol")) == symbol:
+            try:
+                return float(p.get("size") or 0)
+            except (TypeError, ValueError):
+                return None
+    return 0.0  # no entry for this symbol = flat
+
+
+def record_outcome(success):
+    """Circuit breaker: tracks consecutive FAILED trades (real ones only --
+    dry-run doesn't count, nothing actually happened). After N in a row
+    (configurable), auto-flips the kill switch on and sends an alert, so a
+    systemic problem (bad API key, Delta outage, etc.) can't silently keep
+    failing trade after trade unattended."""
+    s = load_settings()
+    if success:
+        if s.get("consecutive_failures", 0) != 0:
+            s["consecutive_failures"] = 0
+            save_settings(s)
+        return
+    s["consecutive_failures"] = s.get("consecutive_failures", 0) + 1
+    threshold = s.get("circuit_breaker_threshold", 3)
+    if s["consecutive_failures"] >= threshold and not s.get("kill_switch"):
+        s["kill_switch"] = True
+        save_settings(s)
+        audit("circuit_breaker_tripped", consecutive_failures=s["consecutive_failures"], threshold=threshold)
+        notify_trade_outcome(
+            "circuit_breaker",
+            f"🛑 Circuit breaker tripped: {s['consecutive_failures']} consecutive failed trades. "
+            f"Kill switch auto-enabled — all live orders blocked until you turn it off in Trade Params.",
+            settings=s,
+        )
+    else:
+        save_settings(s)
 
 
 # ==================== margin precheck ====================
@@ -332,6 +452,8 @@ def health():
         "active_account_label": ACCOUNT_LABELS.get(active, active),
         "kill_switch": settings.get("kill_switch", False),
         "dry_run": settings.get("dry_run", False),
+        "telegram_configured": bool(TG_BOT_TOKEN and TG_CHAT_ID),
+        "consecutive_failures": settings.get("consecutive_failures", 0),
     })
 
 
@@ -388,6 +510,31 @@ def settings_endpoint():
         current["dry_run"] = bool(data["dry_run"])
     if "kill_switch" in data:
         current["kill_switch"] = bool(data["kill_switch"])
+        if not current["kill_switch"]:
+            # manually turning the kill switch back off also resets the
+            # circuit-breaker counter, so it doesn't instantly re-trip
+            current["consecutive_failures"] = 0
+    if "unwind_enabled" in data:
+        current["unwind_enabled"] = bool(data["unwind_enabled"])
+    if "circuit_breaker_threshold" in data:
+        try:
+            v = int(data["circuit_breaker_threshold"])
+            if v <= 0:
+                raise ValueError()
+            current["circuit_breaker_threshold"] = v
+        except (ValueError, TypeError):
+            return jsonify({"ok": False, "error": "circuit_breaker_threshold must be a positive integer"}), 400
+    if "stale_data_max_seconds" in data:
+        try:
+            v = float(data["stale_data_max_seconds"])
+            if v <= 0:
+                raise ValueError()
+            current["stale_data_max_seconds"] = v
+        except (ValueError, TypeError):
+            return jsonify({"ok": False, "error": "stale_data_max_seconds must be a positive number"}), 400
+    for k in ("notify_on_success", "notify_on_failure", "notify_on_naked_position", "notify_on_circuit_breaker"):
+        if k in data:
+            current[k] = bool(data[k])
     if "active_account" in data:
         which = data["active_account"]
         if which not in ("A", "B"):
@@ -469,6 +616,15 @@ def account_info():
     # either way.
     positions_by_symbol = {}
     positions_error = None
+    risk_by_underlying = {}  # e.g. "BTC" -> {margin, initial_margin, maintenance_margin, delta, theta, vega, gamma}
+
+    def underlying_of(symbol):
+        # option/future symbols look like "C-BTC-78000-280826" or "BTCUSD"
+        for u in ("BTC", "ETH", "XAUT"):
+            if u in (symbol or ""):
+                return u
+        return "OTHER"
+
     for underlying in ("BTC", "ETH", "XAUT"):
         st, data = _delta_get("/v2/positions/margined", {"underlying_asset_symbol": underlying})
         if data.get("success"):
@@ -480,13 +636,55 @@ def account_info():
                 if size == 0:
                     continue
                 sym = p.get("product_symbol") or p.get("symbol")
+                margin_val = p.get("margin")
                 positions_by_symbol[sym] = {
                     "symbol": sym, "size": size,
                     "entry_price": p.get("entry_price"), "mark_price": p.get("mark_price"),
                     "liquidation_price": p.get("liquidation_price"),
                     "unrealized_pnl": p.get("unrealized_pnl") or p.get("unrealized_cashflow"),
-                    "margin": p.get("margin"),
+                    "margin": margin_val,
                 }
+
+                coin = underlying_of(sym)
+                bucket = risk_by_underlying.setdefault(coin, {
+                    "margin": 0.0, "initial_margin": 0.0, "maintenance_margin": 0.0,
+                    "delta": 0.0, "theta": 0.0, "vega": 0.0, "gamma": 0.0,
+                    "fields_available": {"initial_margin": False, "maintenance_margin": False, "greeks": False},
+                })
+                try:
+                    bucket["margin"] += float(margin_val or 0)
+                except (TypeError, ValueError):
+                    pass
+                # opportunistic: these exact field names aren't publicly confirmed
+                # in Delta's docs, so only used if actually present
+                if p.get("initial_margin") is not None:
+                    try:
+                        bucket["initial_margin"] += float(p["initial_margin"])
+                        bucket["fields_available"]["initial_margin"] = True
+                    except (TypeError, ValueError):
+                        pass
+                if p.get("maintenance_margin") is not None:
+                    try:
+                        bucket["maintenance_margin"] += float(p["maintenance_margin"])
+                        bucket["fields_available"]["maintenance_margin"] = True
+                    except (TypeError, ValueError):
+                        pass
+
+                # portfolio greeks: per-contract greeks come from the ticker,
+                # scaled by this position's signed size
+                try:
+                    tst, tdata = _delta_get(f"/v2/tickers/{sym}", signed=False)
+                    if tdata.get("success"):
+                        g = (tdata.get("result") or {}).get("greeks") or {}
+                        if g:
+                            bucket["fields_available"]["greeks"] = True
+                            for greek in ("delta", "theta", "vega", "gamma"):
+                                try:
+                                    bucket[greek] += float(g.get(greek) or 0) * size
+                                except (TypeError, ValueError):
+                                    pass
+                except Exception:
+                    pass
         elif positions_error is None:
             positions_error = data.get("error")
 
@@ -500,6 +698,8 @@ def account_info():
         "margin_mode_note": None if margin_mode != "unknown" else f"Could not confirm via API ({margin_mode_error}) — check Delta app: Portfolio tab.",
         "positions": list(positions_by_symbol.values()),
         "positions_note": positions_error,
+        "risk_by_underlying": risk_by_underlying,
+        "risk_note": "Best-effort reconstruction from position + ticker data — Delta's exact Initial/Maintenance Margin split isn't in the public API docs, so those two may show '—' if the position object doesn't expose them directly. Position Margin and Greeks are computed live.",
     })
 
 
@@ -509,14 +709,17 @@ def precheck_leg(symbol, side, size, band_pct):
     finish in max(t_buy, t_sell) instead of t_buy + t_sell, and so BOTH
     sides are known-fillable (or not) before either order is committed --
     catching a doomed trade upfront instead of discovering it only after
-    the buy leg has already gone through."""
+    the buy leg has already gone through. Also grabs the pre-trade position
+    size (piggybacking on this same parallel window) for post-trade
+    reconciliation later."""
     try:
         get_product(symbol)  # warms cache, used again during actual placement
         depth = check_depth(symbol, side, size, band_pct)
     except Exception as e:
-        return {"symbol": symbol, "ok": False, "available": 0, "error": str(e)}
+        return {"symbol": symbol, "ok": False, "available": 0, "error": str(e), "position_before": None}
     ok = depth["available"] >= size
-    return {"symbol": symbol, "ok": ok, "available": depth["available"], "best_price": depth["best_price"]}
+    position_before = get_position_size(symbol)
+    return {"symbol": symbol, "ok": ok, "available": depth["available"], "best_price": depth["best_price"], "position_before": position_before}
 
 
 @app.route("/api/place-spread", methods=["POST"])
@@ -567,6 +770,9 @@ def place_spread():
     avail, bal_err = get_available_balance()
     if avail is not None and avail <= 0:
         audit("margin_precheck_block", available_balance=avail)
+        if not dry_run:
+            record_outcome(False)
+            notify_trade_outcome("failure", "❌ Order blocked: available balance is ₹0/$0 — nothing was placed.", settings=settings)
         return jsonify({"ok": False, "error": "Available balance is ₹0/$0 (or could not be confirmed positive) — refusing to place any leg. Check your Delta wallet."}), 400
 
     # ---- parallel precheck (both legs at once) ----
@@ -590,13 +796,14 @@ def place_spread():
         audit("precheck_fail", buy_precheck=buy_precheck, sell_precheck=sell_precheck)
         problems = []
         if not (buy_precheck and buy_precheck["ok"]):
-            problems.append(f"BUY {buy_leg['symbol']}: only {buy_precheck['available']:.0f} lots depth available (need {buy_leg['size']})" if buy_precheck else "BUY precheck failed")
+            problems.append(f"BUY {buy_leg['symbol']}: only {buy_precheck['available']:.0f} lots depth available (need {buy_leg['size']})" if buy_precheck else f"BUY precheck failed ({buy_precheck.get('error') if buy_precheck else 'unknown'})")
         if not (sell_precheck and sell_precheck["ok"]):
-            problems.append(f"SELL {sell_leg['symbol']}: only {sell_precheck['available']:.0f} lots depth available (need {sell_leg['size']})" if sell_precheck else "SELL precheck failed")
-        return jsonify({
-            "ok": False, "leg1": None, "leg2": None, "dry_run": dry_run,
-            "error": "Insufficient orderbook depth on at least one leg — nothing was placed. " + " · ".join(problems),
-        })
+            problems.append(f"SELL {sell_leg['symbol']}: only {sell_precheck['available']:.0f} lots depth available (need {sell_leg['size']})" if sell_precheck else f"SELL precheck failed ({sell_precheck.get('error') if sell_precheck else 'unknown'})")
+        msg = "Insufficient orderbook depth (or stale data) on at least one leg — nothing was placed. " + " · ".join(problems)
+        if not dry_run:
+            record_outcome(False)
+            notify_trade_outcome("failure", f"❌ Order precheck failed: {msg}", settings=settings)
+        return jsonify({"ok": False, "leg1": None, "leg2": None, "dry_run": dry_run, "error": msg})
 
     # ---- leg 1: BUY fires FIRST (uses less/no margin) ----
     # If this fails, nothing has happened yet -- clean abort, nothing to
@@ -605,10 +812,11 @@ def place_spread():
     # not an uncovered short -- the safer failure mode to be left holding.
     buy_result = place_market_leg(buy_leg["symbol"], "buy", buy_leg["size"], depth_band_pct, dry_run=dry_run)
     if not buy_result["ok"]:
-        return jsonify({
-            "ok": False, "leg1": buy_result, "leg2": None, "dry_run": dry_run,
-            "error": "Buy leg did not fill (or insufficient orderbook depth) — no position taken, sell leg was not attempted.",
-        })
+        msg = "Buy leg did not fill (or insufficient orderbook depth) — no position taken, sell leg was not attempted."
+        if not dry_run:
+            record_outcome(False)
+            notify_trade_outcome("failure", f"❌ Buy leg failed, nothing placed: {buy_leg['symbol']} — {buy_result.get('error','')}", settings=settings)
+        return jsonify({"ok": False, "leg1": buy_result, "leg2": None, "dry_run": dry_run, "error": msg})
 
     # size the sell leg proportionally to whatever fraction of the buy
     # actually filled (handles partial fills cleanly, keeps the ratio intact)
@@ -630,25 +838,67 @@ def place_spread():
             break
 
     if not sell_result or sell_result["filled_size"] == 0:
-        # No auto-unwind (by design, per instruction). Leftover position is
-        # the buy leg alone -- a naked long, bounded risk -- but still flag
-        # it clearly so it gets looked at.
-        return jsonify({
-            "ok": False, "leg1": buy_result, "leg2": sell_result, "dry_run": dry_run,
-            "error": (
+        # Sell leg is dead -- buy leg (bounded-risk naked long) is left
+        # standing. Auto-unwind is OPT-IN (Trade Params toggle, off by
+        # default): if enabled, fire an immediate opposite-side order to
+        # flatten it; either way, this gets its own urgent notification
+        # channel distinct from generic failures.
+        unwind_result = None
+        if settings.get("unwind_enabled") and not dry_run:
+            unwind_result = unwind_leg(buy_leg["symbol"], "sell", buy_result["filled_size"], depth_band_pct, dry_run)
+
+        if unwind_result and unwind_result.get("ok") and unwind_result.get("filled_size", 0) >= buy_result["filled_size"]:
+            msg = f"Sell leg failed after retries, but auto-unwind flattened the buy leg ({buy_result['filled_size']} lots on {buy_leg['symbol']}). No net position taken."
+            notify_kind, notify_msg = "naked_position", f"⚠️ Sell leg failed but auto-unwound successfully — {buy_leg['symbol']} flattened, no leftover position."
+        else:
+            msg = (
                 f"Sell leg failed after retries (insufficient margin, thin book, or rejected). "
-                f"You have a naked LONG position of {buy_result['filled_size']} lots on {buy_leg['symbol']} "
-                f"left over from the buy leg. Auto-unwind is disabled — review manually."
-            ) if not dry_run else "Sell leg simulation failed (insufficient depth) after retries. (dry run — no real position was taken on either leg.)",
-        })
+                f"You have a naked LONG position of {buy_result['filled_size']} lots on {buy_leg['symbol']} left over from the buy leg. "
+                + ("Auto-unwind was attempted but did not fully succeed — check Delta NOW." if settings.get("unwind_enabled") else "Auto-unwind is OFF (enable in Trade Params if you want this handled automatically) — review manually.")
+            ) if not dry_run else "Sell leg simulation failed (insufficient depth) after retries. (dry run — no real position was taken on either leg.)"
+            notify_kind, notify_msg = "naked_position", f"🚨 NAKED POSITION: sell leg failed, {buy_result['filled_size']} lots of {buy_leg['symbol']} left uncovered. {'Unwind attempted, check Delta.' if settings.get('unwind_enabled') else 'Auto-unwind is OFF — action needed.'}"
+
+        if not dry_run:
+            record_outcome(False)
+            notify_trade_outcome(notify_kind, notify_msg, settings=settings)
+        return jsonify({"ok": False, "leg1": buy_result, "leg2": sell_result, "unwind": unwind_result, "dry_run": dry_run, "error": msg})
+
+    # ---- post-trade reconciliation ----
+    # Confirms Delta's own position ledger agrees with what the fill
+    # responses told us -- catches any silent mismatch (race condition,
+    # partial data, etc.) instead of just trusting the order responses blindly.
+    reconciliation_notes = []
+    if not dry_run:
+        buy_pos_after = get_position_size(buy_leg["symbol"])
+        sell_pos_after = get_position_size(sell_leg["symbol"])
+        buy_pos_before = (buy_precheck or {}).get("position_before")
+        sell_pos_before = (sell_precheck or {}).get("position_before")
+        if buy_pos_before is not None and buy_pos_after is not None:
+            expected = buy_pos_before + buy_result["filled_size"]
+            if abs(buy_pos_after - expected) > 0.01:
+                reconciliation_notes.append(f"{buy_leg['symbol']}: expected position {expected}, Delta shows {buy_pos_after}")
+        if sell_pos_before is not None and sell_pos_after is not None:
+            expected = sell_pos_before - sell_result["filled_size"]
+            if abs(sell_pos_after - expected) > 0.01:
+                reconciliation_notes.append(f"{sell_leg['symbol']}: expected position {expected}, Delta shows {sell_pos_after}")
+        if reconciliation_notes:
+            audit("reconciliation_mismatch", notes=reconciliation_notes)
+
+    reconciliation_warning = ("Reconciliation mismatch — " + " · ".join(reconciliation_notes)) if reconciliation_notes else None
 
     if sell_result["filled_size"] < sell_size:
-        return jsonify({
-            "ok": True, "leg1": buy_result, "leg2": sell_result, "dry_run": dry_run,
-            "warning": f"Sell leg partially filled ({sell_result['filled_size']}/{sell_size}); ratio vs the buy leg is now mismatched — review positions manually.",
-        })
+        warning = f"Sell leg partially filled ({sell_result['filled_size']}/{sell_size}); ratio vs the buy leg is now mismatched — review positions manually."
+        if reconciliation_warning:
+            warning += " " + reconciliation_warning
+        if not dry_run:
+            record_outcome(True)  # order executed, just not at full size -- not a "failure" for circuit-breaker purposes
+            notify_trade_outcome("success", f"⚠️ Spread executed with partial sell fill: {buy_leg['symbol']} x{buy_result['filled_size']} / {sell_leg['symbol']} x{sell_result['filled_size']}. {warning}", settings=settings)
+        return jsonify({"ok": True, "leg1": buy_result, "leg2": sell_result, "dry_run": dry_run, "warning": warning})
 
-    return jsonify({"ok": True, "leg1": buy_result, "leg2": sell_result, "warning": None, "dry_run": dry_run})
+    if not dry_run:
+        record_outcome(True)
+        notify_trade_outcome("success", f"✅ Spread executed: BUY {buy_leg['symbol']} x{buy_result['filled_size']} @ {buy_result['avg_price']} / SELL {sell_leg['symbol']} x{sell_result['filled_size']} @ {sell_result['avg_price']}", settings=settings)
+    return jsonify({"ok": True, "leg1": buy_result, "leg2": sell_result, "warning": reconciliation_warning, "dry_run": dry_run})
 
 
 # ==================== keep-alive (best-effort, use UptimeRobot as primary) ====================
