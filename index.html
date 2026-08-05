@@ -307,33 +307,6 @@
   .toolbar-badge.kill{background:rgba(242,84,91,.18);color:var(--put);border:1px solid rgba(242,84,91,.4);}
   .toolbar-badge.dry{background:rgba(255,180,60,.18);color:#ffb43c;border:1px solid rgba(255,180,60,.4);}
 
-  /* ---- unified tabbed ops panel (Account / Order log / Trade Params) ---- */
-  .ops-modal{max-width:640px;width:100%;max-height:85vh;display:flex;flex-direction:column;padding:0;overflow:hidden;}
-  .ops-tabbar{display:flex;border-bottom:1px solid var(--border);padding:0 18px;flex-shrink:0;position:relative;background:var(--surface);}
-  .ops-tab{background:none;border:none;color:var(--muted);font-family:var(--sans);font-weight:700;font-size:12.5px;padding:14px 14px 12px;cursor:pointer;border-bottom:2px solid transparent;white-space:nowrap;}
-  .ops-tab:hover{color:var(--text);}
-  .ops-tab.active{color:var(--text);border-bottom-color:var(--accent);}
-  .ops-close{position:absolute;top:8px;right:12px;background:none;border:none;color:var(--muted);font-size:15px;cursor:pointer;padding:6px 9px;border-radius:6px;}
-  .ops-close:hover{color:var(--text);background:var(--surface3);}
-  .ops-body{overflow-y:auto;padding:16px 20px 20px;flex:1;}
-  .ops-panel{display:none;}
-  .ops-panel.active{display:block;}
-
-  /* prominent kill-switch / dry-run cards -- distinct from the smaller inline toggles */
-  .tp-toggle-card{display:flex;align-items:center;justify-content:space-between;gap:12px;border:1px solid var(--border);border-radius:10px;padding:12px 14px;margin-bottom:10px;background:var(--surface3);}
-  .tp-toggle-card .ttl{font-weight:800;font-size:13.5px;}
-  .tp-toggle-card .sub{font-size:11px;color:var(--muted);margin-top:3px;line-height:1.4;}
-  .tp-toggle-card.danger{border-color:rgba(242,84,91,.35);}
-  .tp-toggle-card.warn{border-color:rgba(255,180,60,.35);}
-  .tp-switch{display:inline-block;flex-shrink:0;cursor:pointer;}
-  .tp-switch input{display:none;}
-  .tp-switch .sw{display:block;width:42px;height:24px;border-radius:999px;background:var(--surface2);border:1px solid var(--border);position:relative;transition:background .15s,border-color .15s;}
-  .tp-switch .sw::after{content:'';position:absolute;top:2px;left:2px;width:18px;height:18px;border-radius:50%;background:var(--muted);transition:transform .15s,background .15s;}
-  .tp-switch input:checked + .sw{background:var(--accent);border-color:var(--accent);}
-  .tp-switch input:checked + .sw::after{transform:translateX(18px);background:#fff;}
-  .tp-toggle-card.danger .tp-switch input:checked + .sw{background:var(--put);border-color:var(--put);}
-  .tp-toggle-card.warn .tp-switch input:checked + .sw{background:#ffb43c;border-color:#ffb43c;}
-
   /* ---- login gate ---- */
   #loginGate{position:fixed;inset:0;z-index:99999;background:var(--bg);display:flex;align-items:center;justify-content:center;padding:20px;}
   #loginGate.hidden{display:none;}
@@ -967,123 +940,129 @@
   </div>
 </div>
 
-<div class="alert-popover-overlay" id="opsPanelOverlay">
-  <div class="settings-modal ops-modal">
-    <div class="ops-tabbar">
-      <button class="ops-tab" data-tab="account">📊 Account</button>
-      <button class="ops-tab" data-tab="log">🧾 Order log</button>
-      <button class="ops-tab" data-tab="params">⚙️ Trade Params</button>
-      <button class="ops-close" id="opsCloseBtn" title="Close">✕</button>
+<div class="alert-popover-overlay" id="accountInfoOverlay">
+  <div class="settings-modal" style="max-width:560px;">
+    <h4>Delta account — live</h4>
+    <p class="note" id="acctStatus">Loading…</p>
+    <div id="acctSummary"></div>
+    <div id="acctBalances"></div>
+    <div id="acctPositions"></div>
+    <div id="acctRisk"></div>
+    <div class="btnrow">
+      <button class="test-btn" id="acctRefreshBtn">Refresh</button>
+      <button id="acctCloseBtn">Close</button>
     </div>
+  </div>
+</div>
 
-    <div class="ops-body">
-      <div class="ops-panel" data-panel="account">
-        <p class="note" id="acctStatus">Loading…</p>
-        <div id="acctSummary"></div>
-        <div id="acctBalances"></div>
-        <div id="acctPositions"></div>
-        <div id="acctRisk"></div>
-        <div class="btnrow"><button class="test-btn" id="acctRefreshBtn">Refresh</button></div>
-      </div>
+<div class="alert-popover-overlay" id="orderLogOverlay">
+  <div class="settings-modal" style="max-width:760px;">
+    <h4>Order audit log</h4>
+    <p class="note">Every order attempt/result, logged server-side. Lives on Render's local disk — survives normal operation but resets on redeploy.</p>
+    <label class="trade-col-toggle" style="margin:6px 0 10px;">
+      <input type="checkbox" id="orderLogRawToggle">
+      <span class="tct-track"><span class="tct-thumb"></span></span>
+      <span class="tct-label">Show raw JSON instead</span>
+    </label>
+    <div id="orderLogBody" style="max-height:400px;overflow:auto;"></div>
+    <div class="btnrow">
+      <button class="test-btn" id="orderLogRefreshBtn">Refresh</button>
+      <button id="orderLogCloseBtn">Close</button>
+    </div>
+  </div>
+</div>
 
-      <div class="ops-panel" data-panel="log">
-        <p class="note">Every order attempt/result, logged server-side. Lives on Render's local disk — survives normal operation but resets on redeploy.</p>
-        <label class="trade-col-toggle" style="margin:6px 0 10px;">
-          <input type="checkbox" id="orderLogRawToggle">
-          <span class="tct-track"><span class="tct-thumb"></span></span>
-          <span class="tct-label">Show raw JSON instead</span>
-        </label>
-        <div id="orderLogBody" style="max-height:400px;overflow:auto;"></div>
-        <div class="btnrow"><button class="test-btn" id="orderLogRefreshBtn">Refresh</button></div>
-      </div>
+<div class="alert-popover-overlay" id="tradeParamsOverlay">
+  <div class="settings-modal" style="max-width:480px;">
+    <h4>Trade parameters</h4>
+    <div id="tpBanners"></div>
+    <p class="note">These apply instantly — no code edit, no redeploy, no cache-clearing needed. Server-side values sync live to your Render backend via "Sync to server"; the last section is local to this browser only.</p>
 
-      <div class="ops-panel" data-panel="params">
-        <div id="tpBanners"></div>
+    <div class="acct-section-title">Order safety — synced to backend</div>
+    <label>Fat-finger HARD BLOCK (max lots per leg)</label>
+    <input type="number" id="tpMaxLotSize" min="1" step="1">
+    <p class="note" style="margin:2px 0 8px;">Orders above this are refused server-side — no confirmation can override it.</p>
 
-        <div class="tp-toggle-card danger" id="tpKillSwitchCard">
-          <div><div class="ttl">🛑 Kill switch</div><div class="sub">Blocks ALL live orders immediately, no exceptions</div></div>
-          <label class="tp-switch"><input type="checkbox" id="tpKillSwitch"><span class="sw"></span></label>
-        </div>
-        <div class="tp-toggle-card warn" id="tpDryRunCard">
-          <div><div class="ttl">🧪 Dry-run mode</div><div class="sub">Simulates the full flow — depth checks + margin precheck run for real, but no real order is ever sent</div></div>
-          <label class="tp-switch"><input type="checkbox" id="tpDryRun"><span class="sw"></span></label>
-        </div>
+    <label>Default depth-check band %</label>
+    <input type="number" id="tpDepthBandPct" min="0.1" step="0.1">
+    <p class="note" style="margin:2px 0 8px;">How far from the best price the orderbook depth precheck looks, before either leg is placed.</p>
 
-        <p class="note" style="margin-top:10px;">Everything below applies instantly — no code edit, no redeploy, no cache-clearing. Server-side values sync via "Sync to server"; the last section is local to this browser only.</p>
+    <label>Gap between BUY confirming and SELL firing (ms)</label>
+    <input type="number" id="tpInterLegDelay" min="0" step="50">
+    <p class="note" style="margin:2px 0 8px;">0 = fire the sell leg immediately once the buy leg confirms (fastest, smallest market-move window).</p>
 
-        <div class="acct-section-title">Order safety — synced to backend</div>
-        <label>Fat-finger HARD BLOCK (max lots per leg)</label>
-        <input type="number" id="tpMaxLotSize" min="1" step="1">
-        <p class="note" style="margin:2px 0 8px;">Orders above this are refused server-side — no confirmation can override it.</p>
+    <label>Sell-leg retry attempts</label>
+    <input type="number" id="tpSellRetries" min="0" step="1">
+    <p class="note" style="margin:2px 0 8px;">How many extra tries for the sell leg (after the first) before giving up.</p>
 
-        <label>Default depth-check band %</label>
-        <input type="number" id="tpDepthBandPct" min="0.1" step="0.1">
-        <p class="note" style="margin:2px 0 8px;">How far from the best price the orderbook depth precheck looks, before either leg is placed.</p>
+    <label>Max orderbook staleness (seconds)</label>
+    <input type="number" id="tpStaleSeconds" min="0.5" step="0.5">
+    <p class="note" style="margin:2px 0 8px;">If a depth-check response takes longer than this, it's treated as too slow/unreliable to trade on — that leg is refused rather than risking a trade on stale data.</p>
 
-        <label>Gap between BUY confirming and SELL firing (ms)</label>
-        <input type="number" id="tpInterLegDelay" min="0" step="50">
-        <p class="note" style="margin:2px 0 8px;">0 = fire the sell leg immediately once the buy leg confirms (fastest, smallest market-move window).</p>
+    <div class="acct-section-title">If the sell leg fails — synced to backend</div>
+    <label class="trade-col-toggle" style="margin:6px 0;">
+      <input type="checkbox" id="tpUnwindEnabled">
+      <span class="tct-track"><span class="tct-thumb"></span></span>
+      <span class="tct-label">🔁 Auto-unwind the leftover buy leg</span>
+    </label>
+    <p class="note" style="margin:2px 0 8px;">OFF by default. A naked long (bounded risk — you've only paid the premium) is left as-is for manual review. If ON, an immediate opposite-side order tries to flatten it automatically instead.</p>
 
-        <label>Sell-leg retry attempts</label>
-        <input type="number" id="tpSellRetries" min="0" step="1">
-        <p class="note" style="margin:2px 0 8px;">How many extra tries for the sell leg (after the first) before giving up.</p>
+    <div class="acct-section-title">Circuit breaker — synced to backend</div>
+    <label>Auto-kill-switch after this many consecutive failed trades</label>
+    <input type="number" id="tpCircuitThreshold" min="1" step="1">
+    <p class="note" style="margin:2px 0 8px;">Protects against a systemic problem (bad key, Delta outage) silently failing trade after trade unattended. Resets to 0 the moment a trade succeeds, or when you manually turn the kill switch back off.</p>
 
-        <label>Max orderbook staleness (seconds)</label>
-        <input type="number" id="tpStaleSeconds" min="0.5" step="0.5">
-        <p class="note" style="margin:2px 0 8px;">If a depth-check response takes longer than this, it's treated as too slow/unreliable to trade on — that leg is refused rather than risking a trade on stale data.</p>
+    <div class="acct-section-title">Emergency controls — synced to backend</div>
+    <label class="trade-col-toggle" style="margin:6px 0;">
+      <input type="checkbox" id="tpKillSwitch">
+      <span class="tct-track"><span class="tct-thumb"></span></span>
+      <span class="tct-label">🛑 Kill switch — block ALL live orders</span>
+    </label>
+    <label class="trade-col-toggle" style="margin:6px 0;">
+      <input type="checkbox" id="tpDryRun">
+      <span class="tct-track"><span class="tct-thumb"></span></span>
+      <span class="tct-label">🧪 Dry-run mode — simulate only, no real orders</span>
+    </label>
+    <p class="note" style="margin:2px 0 8px;">Dry-run still runs the real depth checks and margin precheck, but never sends an actual order to Delta — response looks identical, tagged "dry_run". Use this to test the whole flow (including fat-finger warnings) risk-free.</p>
 
-        <div class="acct-section-title">If the sell leg fails — synced to backend</div>
-        <label class="trade-col-toggle" style="margin:6px 0;">
-          <input type="checkbox" id="tpUnwindEnabled">
-          <span class="tct-track"><span class="tct-thumb"></span></span>
-          <span class="tct-label">🔁 Auto-unwind the leftover buy leg</span>
-        </label>
-        <p class="note" style="margin:2px 0 8px;">OFF by default. A naked long (bounded risk — you've only paid the premium) is left as-is for manual review. If ON, an immediate opposite-side order tries to flatten it automatically instead.</p>
+    <div class="acct-section-title">Telegram notifications — synced to backend</div>
+    <p class="note" id="tpTelegramStatus" style="margin:2px 0 8px;"></p>
+    <label class="trade-col-toggle" style="margin:6px 0;">
+      <input type="checkbox" id="tpNotifySuccess">
+      <span class="tct-track"><span class="tct-thumb"></span></span>
+      <span class="tct-label">✅ Trade executed successfully</span>
+    </label>
+    <label class="trade-col-toggle" style="margin:6px 0;">
+      <input type="checkbox" id="tpNotifyFailure">
+      <span class="tct-track"><span class="tct-thumb"></span></span>
+      <span class="tct-label">❌ Trade failed / blocked (any reason)</span>
+    </label>
+    <label class="trade-col-toggle" style="margin:6px 0;">
+      <input type="checkbox" id="tpNotifyNaked">
+      <span class="tct-track"><span class="tct-thumb"></span></span>
+      <span class="tct-label">🚨 Naked position left over (sell leg failed)</span>
+    </label>
+    <label class="trade-col-toggle" style="margin:6px 0;">
+      <input type="checkbox" id="tpNotifyCircuit">
+      <span class="tct-track"><span class="tct-thumb"></span></span>
+      <span class="tct-label">🛑 Circuit breaker auto-tripped</span>
+    </label>
+    <p class="note" style="margin:2px 0 8px;">This fires from the SERVER (Render env vars TG_BOT_TOKEN / TG_CHAT_ID) — separate from the dashboard's own price-alert bot, so it works even if this tab is closed. 🚨 Naked-position alerts are recommended to always keep on.</p>
 
-        <div class="acct-section-title">Circuit breaker — synced to backend</div>
-        <label>Auto-kill-switch after this many consecutive failed trades</label>
-        <input type="number" id="tpCircuitThreshold" min="1" step="1">
-        <p class="note" style="margin:2px 0 8px;">Protects against a systemic problem (bad key, Delta outage) silently failing trade after trade unattended. Resets to 0 the moment a trade succeeds, or when you manually turn the kill switch back off.</p>
+    <div class="acct-section-title">Active Delta account — synced to backend</div>
+    <div id="tpAccountSwitcher" class="order-spec"></div>
+    <p class="note" style="margin:6px 0 8px;">Both accounts' keys live in Render env vars (DELTA_API_KEY_A/B, DELTA_API_SECRET_A/B) — only which one is "active" is switched from here, never the keys themselves.</p>
 
-        <div class="acct-section-title">Telegram notifications — synced to backend</div>
-        <p class="note" id="tpTelegramStatus" style="margin:2px 0 8px;"></p>
-        <label class="trade-col-toggle" style="margin:6px 0;">
-          <input type="checkbox" id="tpNotifySuccess">
-          <span class="tct-track"><span class="tct-thumb"></span></span>
-          <span class="tct-label">✅ Trade executed successfully</span>
-        </label>
-        <label class="trade-col-toggle" style="margin:6px 0;">
-          <input type="checkbox" id="tpNotifyFailure">
-          <span class="tct-track"><span class="tct-thumb"></span></span>
-          <span class="tct-label">❌ Trade failed / blocked (any reason)</span>
-        </label>
-        <label class="trade-col-toggle" style="margin:6px 0;">
-          <input type="checkbox" id="tpNotifyNaked">
-          <span class="tct-track"><span class="tct-thumb"></span></span>
-          <span class="tct-label">🚨 Naked position left over (sell leg failed)</span>
-        </label>
-        <label class="trade-col-toggle" style="margin:6px 0;">
-          <input type="checkbox" id="tpNotifyCircuit">
-          <span class="tct-track"><span class="tct-thumb"></span></span>
-          <span class="tct-label">🛑 Circuit breaker auto-tripped</span>
-        </label>
-        <p class="note" style="margin:2px 0 8px;">This fires from the SERVER (Render env vars TG_BOT_TOKEN / TG_CHAT_ID) — separate from the dashboard's own price-alert bot, so it works even if this tab is closed. 🚨 Naked-position alerts are recommended to always keep on.</p>
+    <div class="acct-section-title">Order safety — local to this browser</div>
+    <label>Fat-finger WARNING threshold (lots)</label>
+    <input type="number" id="tpWarnLotSize" min="1" step="1">
+    <p class="note" style="margin:2px 0 0;">Above this, a confirm popup appears before placing — but it can still be confirmed through.</p>
 
-        <div class="acct-section-title">Active Delta account — synced to backend</div>
-        <div id="tpAccountSwitcher" class="order-spec"></div>
-        <p class="note" style="margin:6px 0 8px;">Both accounts' keys live in Render env vars (DELTA_API_KEY_A/B, DELTA_API_SECRET_A/B) — only which one is "active" is switched from here, never the keys themselves.</p>
-
-        <div class="acct-section-title">Order safety — local to this browser</div>
-        <label>Fat-finger WARNING threshold (lots)</label>
-        <input type="number" id="tpWarnLotSize" min="1" step="1">
-        <p class="note" style="margin:2px 0 0;">Above this, a confirm popup appears before placing — but it can still be confirmed through.</p>
-
-        <p class="note" id="tpStatus" style="margin-top:10px;"></p>
-        <div class="btnrow">
-          <button class="test-btn" id="tpSyncBtn">Sync to server</button>
-          <button class="save-btn" id="tpSaveBtn">Save</button>
-        </div>
-      </div>
+    <p class="note" id="tpStatus" style="margin-top:10px;"></p>
+    <div class="btnrow">
+      <button class="test-btn" id="tpSyncBtn">Sync to server</button>
+      <button class="save-btn" id="tpSaveBtn">Save</button>
+      <button id="tpCloseBtn">Close</button>
     </div>
   </div>
 </div>
@@ -2688,32 +2667,16 @@ async function loadAccountInfo(){
     statusEl.textContent = 'Network/backend error: ' + e.message;
   }
 }
+document.getElementById('accountInfoBtn').addEventListener('click', ()=>{
+  document.getElementById('accountInfoOverlay').classList.add('open');
+  loadAccountInfo();
+});
 document.getElementById('acctRefreshBtn').addEventListener('click', loadAccountInfo);
-
-// ---- unified tabbed ops panel: Account / Order log / Trade Params ----
-function openOpsPanel(tabName){
-  document.getElementById('opsPanelOverlay').classList.add('open');
-  switchOpsTab(tabName);
-}
-function switchOpsTab(tabName){
-  document.querySelectorAll('.ops-tab').forEach(t=>t.classList.toggle('active', t.dataset.tab === tabName));
-  document.querySelectorAll('.ops-panel').forEach(p=>p.classList.toggle('active', p.dataset.panel === tabName));
-  if(tabName === 'account') loadAccountInfo();
-  else if(tabName === 'log') loadOrderLog();
-  else if(tabName === 'params') openTradeParams();
-}
-document.querySelectorAll('.ops-tab').forEach(tab=>{
-  tab.addEventListener('click', ()=>switchOpsTab(tab.dataset.tab));
+document.getElementById('acctCloseBtn').addEventListener('click', ()=>{
+  document.getElementById('accountInfoOverlay').classList.remove('open');
 });
-document.getElementById('accountInfoBtn').addEventListener('click', ()=>openOpsPanel('account'));
-document.getElementById('orderLogBtn').addEventListener('click', ()=>openOpsPanel('log'));
-document.getElementById('tradeParamsBtn').addEventListener('click', ()=>openOpsPanel('params'));
-document.getElementById('opsCloseBtn').addEventListener('click', ()=>{
-  document.getElementById('opsPanelOverlay').classList.remove('open');
-  refreshToolbarStatus();
-});
-document.getElementById('opsPanelOverlay').addEventListener('click', (e)=>{
-  if(e.target.id === 'opsPanelOverlay'){ document.getElementById('opsPanelOverlay').classList.remove('open'); refreshToolbarStatus(); }
+document.getElementById('accountInfoOverlay').addEventListener('click', (e)=>{
+  if(e.target.id === 'accountInfoOverlay') document.getElementById('accountInfoOverlay').classList.remove('open');
 });
 
 // ---- order audit log panel ----
@@ -2782,7 +2745,17 @@ async function loadOrderLog(){
   }
 }
 document.getElementById('orderLogRawToggle').addEventListener('change', loadOrderLog);
+document.getElementById('orderLogBtn').addEventListener('click', ()=>{
+  document.getElementById('orderLogOverlay').classList.add('open');
+  loadOrderLog();
+});
 document.getElementById('orderLogRefreshBtn').addEventListener('click', loadOrderLog);
+document.getElementById('orderLogCloseBtn').addEventListener('click', ()=>{
+  document.getElementById('orderLogOverlay').classList.remove('open');
+});
+document.getElementById('orderLogOverlay').addEventListener('click', (e)=>{
+  if(e.target.id === 'orderLogOverlay') document.getElementById('orderLogOverlay').classList.remove('open');
+});
 
 // ---- trade parameters panel: fat-finger, depth-band, etc. -- all apply
 // instantly, no code edit / redeploy / cache-clear needed ----
@@ -2855,6 +2828,7 @@ async function openTradeParams(){
   document.getElementById('tpStatus').textContent = '';
   document.getElementById('tpBanners').innerHTML = '';
   renderAccountSwitcher(null, 'A');
+  document.getElementById('tradeParamsOverlay').classList.add('open');
   if(LIVE.backendUrl && LIVE.appSecret){
     try{
       const res = await fetch(LIVE.backendUrl.replace(/\/$/, '') + '/api/settings', {
@@ -2894,6 +2868,14 @@ async function openTradeParams(){
     document.getElementById('tpStatus').textContent = 'Backend not configured yet ("🔴 Live orders") — showing local values only; server-side settings can\'t be synced until it is.';
   }
 }
+document.getElementById('tradeParamsBtn').addEventListener('click', openTradeParams);
+document.getElementById('tpCloseBtn').addEventListener('click', ()=>{
+  document.getElementById('tradeParamsOverlay').classList.remove('open');
+  refreshToolbarStatus();
+});
+document.getElementById('tradeParamsOverlay').addEventListener('click', (e)=>{
+  if(e.target.id === 'tradeParamsOverlay'){ document.getElementById('tradeParamsOverlay').classList.remove('open'); refreshToolbarStatus(); }
+});
 document.getElementById('tpSaveBtn').addEventListener('click', ()=>{
   const warn = parseInt(document.getElementById('tpWarnLotSize').value, 10);
   const band = parseFloat(document.getElementById('tpDepthBandPct').value);
