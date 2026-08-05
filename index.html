@@ -630,6 +630,15 @@
   .acct-table tr:last-child td{border-bottom:none;}
   .acct-table tbody tr:hover td{background:var(--surface3);}
 
+  /* column alignment: label column left, all numeric columns right — headers match cells */
+  .acct-table{width:100%;table-layout:auto;}
+  .acct-table th,.acct-table td{white-space:nowrap;text-align:right;vertical-align:middle;}
+  .acct-table th:first-child,.acct-table td:first-child{text-align:left;}
+  /* horizontal scroll instead of squashed/overflowing columns */
+  #acctBalances,#acctPositions,#acctRisk{overflow-x:auto;}
+  #acctBalances .acct-table,#acctPositions .acct-table,#acctRisk .acct-table{min-width:100%;width:max-content;}
+
+
   /* ---- order log ---- */
   .settings-modal label.trade-col-toggle{display:flex;align-items:center;gap:9px;font-size:12px;color:var(--text);font-weight:700;text-transform:none;letter-spacing:0;margin:10px 0;}
   #orderLogBody:not(:empty){
