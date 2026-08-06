@@ -2558,6 +2558,20 @@ function openOrderQtyModal(params){
     errEl.style.display = 'block';
   }
   currentOrderCtx = legs ? { ...legs, dirParam: params.dir } : null;
+  // fire-and-forget: start streaming the live orderbook for both legs on
+  // the backend RIGHT NOW (modal just opened, user hasn't even typed a
+  // qty yet) so that by the time they hit confirm, the depth check at
+  // order time can read an already-live book instead of paying a fresh
+  // REST round-trip in the critical path. Never blocks/awaited -- if it
+  // fails or the backend doesn't support it yet, place-spread still works
+  // exactly as before, just without this head start.
+  if(legs && LIVE.backendUrl && LIVE.appSecret){
+    fetch(LIVE.backendUrl.replace(/\/$/, '') + '/api/warm-legs', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-App-Secret': LIVE.appSecret },
+      body: JSON.stringify({ symbols: [legs.singleRow.symbol, legs.ratioRow.symbol] }),
+    }).catch(()=>{ /* best-effort only */ });
+  }
   const typeLbl = params.side.toUpperCase();
   const dirLbl = params.dir==='buy' ? 'BUY' : 'SELL';
   const oppLbl = params.dir==='buy' ? 'SELL' : 'BUY';
