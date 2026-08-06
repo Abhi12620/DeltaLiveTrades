@@ -9,11 +9,6 @@ from datetime import datetime, timezone
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 import requests
-try:
-    import websocket  # pip install websocket-client
-    _WS_AVAILABLE = True
-except ImportError:
-    _WS_AVAILABLE = False
 
 # ---- shared HTTP session: reuses TCP+TLS connections to Delta across calls
 # instead of paying a fresh handshake (~50-150ms) on every single request.
@@ -21,158 +16,6 @@ except ImportError:
 # is pure upside -- no behavior change, just less time spent connecting.
 SESSION = requests.Session()
 SESSION.headers.update({"Accept": "application/json"})
-
-WS_URL = "wss://socket.india.delta.exchange"
-
-
-class LiveOrderbookCache:
-    """Keeps a small set of option symbols' L2 books live in memory via
-    Delta's public orderbook WebSocket, so check_depth() at ORDER TIME can
-    read a value that's already sitting in RAM instead of paying a fresh
-    REST round-trip right when it matters most (the 3-4s the user is
-    trying to cut down).
-
-    Usage: call ensure_subscribed([symbols]) as EARLY as possible -- e.g.
-    the moment the user opens the qty modal on the frontend, not when they
-    click "place order" -- so by the time the order actually fires, the
-    book has had time to arrive and update at least once. If the socket
-    hasn't delivered anything fresh yet (cold subscribe, disconnect, etc.)
-    callers must fall back to the REST snapshot -- this cache is a
-    latency optimization, never a hard dependency."""
-
-    MAX_SYMBOLS = 40          # small bounded set -- this is a pre-trade cache, not a market-data platform
-    STALE_UNSUBSCRIBE_S = 600  # drop symbols nobody has asked about in 10 min
-
-    def __init__(self):
-        self._lock = threading.Lock()
-        self._books = {}       # symbol -> {"buy": [...], "sell": [...], "ts": float}
-        self._last_touched = {}  # symbol -> float (last time someone asked for it)
-        self._subscribed = set()
-        self._pending = set()   # requested but not yet sent (socket not open yet)
-        self._ws = None
-        self._ws_open = False
-        self._started = False
-
-    def start(self):
-        if self._started or not _WS_AVAILABLE:
-            return
-        self._started = True
-        threading.Thread(target=self._run_forever, daemon=True).start()
-        threading.Thread(target=self._cleanup_loop, daemon=True).start()
-
-    def ensure_subscribed(self, symbols):
-        """Fire-and-forget: add symbols to the live feed. Safe to call
-        repeatedly (e.g. every time a leg is selected in the UI) -- it's a
-        no-op for symbols already subscribed."""
-        if not _WS_AVAILABLE:
-            return
-        self.start()
-        now = time.time()
-        new_syms = []
-        with self._lock:
-            for s in symbols:
-                if not s:
-                    continue
-                self._last_touched[s] = now
-                if s not in self._subscribed and s not in self._pending:
-                    self._pending.add(s)
-                    new_syms.append(s)
-        if new_syms and self._ws_open:
-            self._send_subscribe(new_syms)
-
-    def get(self, symbol, max_age_s=1.2):
-        """Returns {'buy':[...], 'sell':[...]} if we have a fresh-enough
-        live book for this symbol, else None (caller should fall back to
-        REST)."""
-        with self._lock:
-            self._last_touched[symbol] = time.time()
-            book = self._books.get(symbol)
-        if not book:
-            return None
-        if time.time() - book["ts"] > max_age_s:
-            return None
-        return book
-
-    def _send_subscribe(self, symbols):
-        try:
-            payload = {"type": "subscribe", "payload": {"channels": [
-                {"name": "l2_orderbook", "symbols": symbols}
-            ]}}
-            self._ws.send(json.dumps(payload))
-            with self._lock:
-                self._pending -= set(symbols)
-                self._subscribed |= set(symbols)
-        except Exception:
-            pass  # next reconnect will re-subscribe from _pending/_subscribed
-
-    def _on_open(self, ws):
-        self._ws_open = True
-        with self._lock:
-            all_syms = list(self._subscribed | self._pending)
-        if all_syms:
-            self._send_subscribe(all_syms)
-
-    def _on_message(self, ws, message):
-        try:
-            data = json.loads(message)
-        except Exception:
-            return
-        # be defensive about the exact envelope shape -- different Delta
-        # feed versions/clients nest this slightly differently
-        body = data.get("orderbook", data)
-        if body.get("type") != "l2_orderbook" and data.get("type") != "l2_orderbook":
-            return
-        symbol = body.get("symbol") or data.get("symbol")
-        buy = body.get("buy")
-        sell = body.get("sell")
-        if not symbol or buy is None or sell is None:
-            return
-        with self._lock:
-            self._books[symbol] = {"buy": buy, "sell": sell, "ts": time.time()}
-
-    def _on_error(self, ws, error):
-        self._ws_open = False
-
-    def _on_close(self, ws, *a):
-        self._ws_open = False
-
-    def _run_forever(self):
-        backoff = 1
-        while True:
-            try:
-                self._ws = websocket.WebSocketApp(
-                    WS_URL,
-                    on_open=self._on_open,
-                    on_message=self._on_message,
-                    on_error=self._on_error,
-                    on_close=self._on_close,
-                )
-                self._ws.run_forever(ping_interval=20, ping_timeout=10)
-            except Exception:
-                pass
-            self._ws_open = False
-            time.sleep(backoff)
-            backoff = min(backoff * 2, 30)
-
-    def _cleanup_loop(self):
-        """Drops symbols nobody has touched in a while so the subscription
-        list (and memory) doesn't grow unbounded over a long-running
-        process. Doesn't bother sending an unsubscribe -- just stops
-        caring about the data -- simpler and Delta doesn't mind extra
-        server-side subscriptions for a handful of symbols."""
-        while True:
-            time.sleep(60)
-            now = time.time()
-            with self._lock:
-                stale = [s for s, t in self._last_touched.items()
-                         if now - t > self.STALE_UNSUBSCRIBE_S]
-                for s in stale:
-                    self._last_touched.pop(s, None)
-                    self._books.pop(s, None)
-                    self._subscribed.discard(s)
-
-
-ORDERBOOK_CACHE = LiveOrderbookCache()
 
 app = Flask(__name__)
 CORS(app)
@@ -412,23 +255,11 @@ def check_depth(symbol, side, size, band_pct):
     Sums size across price levels within band_pct of the best price on that
     side -- this band exists ONLY to decide "is there real depth nearby",
     it is never sent to Delta as a limit price. The order placed afterwards
-    is a plain market order with no price restriction.
-
-    PERFORMANCE: tries the live WebSocket orderbook cache FIRST (near-zero
-    latency, already sitting in memory) and only falls back to a REST
-    fetch if we don't have a fresh-enough live book yet. Either way it also
-    makes sure the symbol is subscribed going forward, so a second call on
-    the same symbol a moment later (e.g. the re-check right before firing
-    the actual order) is much more likely to hit the cache."""
-    book = ORDERBOOK_CACHE.get(symbol)
-    source = "ws_cache"
-    if book is None:
-        ORDERBOOK_CACHE.ensure_subscribed([symbol])
-        book = get_orderbook(symbol)
-        source = "rest"
+    is a plain market order with no price restriction."""
+    book = get_orderbook(symbol)
     levels = book.get("buy" if side == "sell" else "sell") or []
     if not levels:
-        return {"available": 0, "best_price": None, "levels_checked": 0, "source": source}
+        return {"available": 0, "best_price": None, "levels_checked": 0}
     best_price = float(levels[0]["price"])
     if side == "sell":
         cutoff = best_price * (1 - band_pct)
@@ -437,7 +268,7 @@ def check_depth(symbol, side, size, band_pct):
         cutoff = best_price * (1 + band_pct)
         in_band = [l for l in levels if float(l["price"]) <= cutoff]
     available = sum(float(l.get("size", 0)) for l in in_band)
-    return {"available": available, "best_price": best_price, "levels_checked": len(in_band), "source": source}
+    return {"available": available, "best_price": best_price, "levels_checked": len(in_band)}
 
 
 def round_to_tick(price, tick_size):
@@ -506,25 +337,17 @@ def place_market_leg(symbol, side, size, band_pct=None, dry_run=False):
     order_id = result.get("id")
 
     # reconcile: poll actual order state instead of trusting the initial ack
-    # -- BUT check the ack itself first. Delta's POST /v2/orders response
-    # for a market order often already comes back "closed"/"filled" with
-    # size/unfilled_size populated (market orders resolve near-instantly),
-    # so if that's already true we skip the poll loop's REST round-trips
-    # entirely instead of unconditionally sleeping/polling at least once.
-    state = result.get("state")
-    filled_size = int(result.get("size", 0)) - int(result.get("unfilled_size", result.get("size", 0)))
-    avg_price = result.get("average_fill_price")
-    if state not in ("closed", "cancelled", "filled") or avg_price is None:
-        for _ in range(FILL_POLL_ATTEMPTS):
-            st, odata = _delta_get(f"/v2/orders/{order_id}")
-            if odata.get("success"):
-                r = odata.get("result", {})
-                state = r.get("state")
-                filled_size = int(r.get("size", 0)) - int(r.get("unfilled_size", r.get("size", 0)))
-                avg_price = r.get("average_fill_price")
-                if state in ("closed", "cancelled", "filled"):
-                    break
-            time.sleep(FILL_POLL_DELAY)
+    filled_size, avg_price, state = 0, None, result.get("state")
+    for _ in range(FILL_POLL_ATTEMPTS):
+        st, odata = _delta_get(f"/v2/orders/{order_id}")
+        if odata.get("success"):
+            r = odata.get("result", {})
+            state = r.get("state")
+            filled_size = int(r.get("size", 0)) - int(r.get("unfilled_size", r.get("size", 0)))
+            avg_price = r.get("average_fill_price")
+            if state in ("closed", "cancelled", "filled"):
+                break
+        time.sleep(FILL_POLL_DELAY)
 
     ok = filled_size > 0
     leg_result = {
@@ -878,37 +701,6 @@ def account_info():
         "risk_by_underlying": risk_by_underlying,
         "risk_note": "Best-effort reconstruction from position + ticker data — Delta's exact Initial/Maintenance Margin split isn't in the public API docs, so those two may show '—' if the position object doesn't expose them directly. Position Margin and Greeks are computed live.",
     })
-
-
-@app.route("/api/warm-legs", methods=["POST"])
-def warm_legs():
-    """Call this the MOMENT leg symbols are known on the frontend (e.g. as
-    soon as the qty modal opens) -- well before the user has even typed a
-    size or clicked confirm. It starts the live orderbook WebSocket
-    subscription for those symbols and warms the product-id cache in the
-    background, so by the time the actual order fires, check_depth() can
-    read an already-live book from memory instead of paying a fresh REST
-    round-trip at the worst possible moment. Fire-and-forget: does not
-    wait for the socket to actually deliver a snapshot, returns instantly
-    either way, and is never on the critical path of placing an order --
-    place-spread still works fine (just slightly slower, via REST
-    fallback) even if this was never called."""
-    if not APP_SECRET or request.headers.get("X-App-Secret") != APP_SECRET:
-        return jsonify({"ok": False, "error": "unauthorized"}), 401
-    data = request.get_json(force=True, silent=True) or {}
-    symbols = [s for s in (data.get("symbols") or []) if s]
-    if not symbols:
-        return jsonify({"ok": False, "error": "symbols required"}), 400
-    ORDERBOOK_CACHE.ensure_subscribed(symbols)
-
-    def _warm_products():
-        for s in symbols:
-            try:
-                get_product(s)
-            except Exception:
-                pass
-    threading.Thread(target=_warm_products, daemon=True).start()
-    return jsonify({"ok": True, "warming": symbols, "ws_available": _WS_AVAILABLE})
 
 
 def precheck_leg(symbol, side, size, band_pct):
