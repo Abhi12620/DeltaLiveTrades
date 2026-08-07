@@ -218,14 +218,12 @@
   .inline-controls{display:flex;gap:10px;margin-left:auto;flex-wrap:wrap;}
   .mini-field{display:flex;flex-direction:column;gap:2px;}
   .mini-field label{font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;font-weight:700;}
-  .mini-field input{width:74px;background:var(--surface2);border:1px solid var(--border);border-radius:5px;color:var(--text);font-family:var(--mono);font-size:12px;font-weight:700;padding:4px 6px;outline:none;}
+  .mini-field input{width:64px;background:var(--surface2);border:1px solid var(--border);border-radius:5px;color:var(--text);font-family:var(--mono);font-size:12px;font-weight:700;padding:4px 6px;outline:none;}
   .mini-field input:focus{border-color:var(--accent);}
+  .mini-field input[id^="callFont"]{width:52px;}
 
   .spread-block .table-scroll{overflow:auto;max-height:600px;}
-  table.spread-table{width:100%;table-layout:fixed;border-collapse:separate;border-spacing:0;font-family:var(--mono);font-size:var(--sp-font,11.5px);min-width:0;}
-  .spread-builder-group{--sp-font:11.5px;}
-  .mini-field.font-field input{width:56px;}
-  .mini-field.font-field .font-val{font-family:var(--mono);font-size:9px;color:var(--muted);}
+  table.spread-table{width:100%;table-layout:fixed;border-collapse:separate;border-spacing:0;font-family:var(--mono);font-size:11.5px;min-width:0;}
   table.spread-table colgroup col.sp-vol{width:10%;}
   table.spread-table colgroup col.sp-strike{width:14%;}
   table.spread-table colgroup col.sp-data{width:15%;}
@@ -257,24 +255,6 @@
   .alert-popover-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:110;align-items:center;justify-content:center;padding:20px;}
   .alert-popover-overlay.open{display:flex;}
   .alert-popover{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow);width:100%;max-width:340px;padding:18px 20px;}
-  /* minimal entrance motion for overlays */
-  @keyframes docPopIn{from{opacity:0;transform:translateY(6px) scale(.985);}to{opacity:1;transform:none;}}
-  .alert-popover-overlay.open > .alert-popover,
-  .alert-popover-overlay.open > .settings-modal,
-  .alert-popover-overlay.open > .ops-modal{animation:docPopIn .16s ease-out;}
-
-  /* ---- BUY / SELL order window: unmistakable green vs red ---- */
-  #orderQtyOverlay .alert-popover{border-top-width:3px;transition:border-color .18s,box-shadow .18s;}
-  #orderQtyOverlay .alert-popover.side-buy{border-color:var(--call);box-shadow:var(--shadow),0 0 0 1px var(--call-dim);}
-  #orderQtyOverlay .alert-popover.side-sell{border-color:var(--put);box-shadow:var(--shadow),0 0 0 1px var(--put-dim);}
-  #orderQtyOverlay .alert-popover.side-buy #orderQtyTitle{color:var(--call);}
-  #orderQtyOverlay .alert-popover.side-sell #orderQtyTitle{color:var(--put);}
-  #orderQtyOverlay .alert-popover.side-buy .order-spec{background:var(--call-dim);}
-  #orderQtyOverlay .alert-popover.side-sell .order-spec{background:var(--put-dim);}
-  #orderQtyConfirmBtn{letter-spacing:.06em;text-transform:uppercase;transition:filter .15s;}
-  #orderQtyConfirmBtn.cta-buy{background:var(--call);border-color:var(--call);color:#06150f;}
-  #orderQtyConfirmBtn.cta-sell{background:var(--put);border-color:var(--put);color:#fff;}
-  #orderQtyConfirmBtn:not(:disabled):hover{filter:brightness(1.08);}
   .alert-popover h4{font-size:13px;margin-bottom:12px;font-family:var(--mono);}
   .alert-popover .row{display:flex;gap:8px;margin-bottom:10px;}
   .alert-popover select, .alert-popover input{flex:1;background:var(--surface3);border:1px solid var(--border);border-radius:7px;color:var(--text);font-family:var(--mono);font-size:13px;padding:7px 9px;outline:none;}
@@ -304,37 +284,37 @@
   .order-spec-divider{border-top:1px dashed var(--border);margin:5px 0;}
   .order-field-label{display:block;font-size:11px;color:var(--muted);font-weight:800;text-transform:uppercase;letter-spacing:.05em;margin:12px 0 4px;}
 
-  .acct-table{width:100%;border-collapse:collapse;margin-top:8px;font-family:var(--mono);font-size:11.5px;}
-  /* fix: header labels and their data columns drifting apart / rows shifting
-     vertically. Fixed row height + middle alignment + tabular numerals keeps
-     every cell locked to its column label. */
-  .acct-table{table-layout:fixed;}
-  .acct-table th,.acct-table td{vertical-align:middle;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-variant-numeric:tabular-nums;line-height:1.5;height:26px;}
-  .acct-table th:first-child,.acct-table td:first-child{text-align:left;}
-  .acct-table th:not(:first-child),.acct-table td:not(:first-child){text-align:right;}
-  .acct-table tbody tr:hover td{background:var(--surface3);}
-  .acct-summary-row{align-items:center;}
-  .acct-summary-row b{font-variant-numeric:tabular-nums;}
-  .acct-table th{text-align:left;color:var(--muted);font-weight:700;padding:4px 6px;border-bottom:1px solid var(--border);}
-  .acct-table td{padding:5px 6px;border-bottom:1px solid var(--border);}
-  .acct-summary-row{display:flex;justify-content:space-between;font-family:var(--mono);font-size:12.5px;padding:4px 0;}
-  .acct-summary-row b{color:var(--text);}
-  .acct-section-title{font-size:11px;color:var(--muted);font-weight:800;text-transform:uppercase;letter-spacing:.05em;margin:14px 0 4px;}
+  /* buy / sell order modal theming */
+  #orderQtyOverlay .alert-popover{transition:border-color .2s, box-shadow .2s;}
+  #orderQtyOverlay.dir-buy .alert-popover{border-color:var(--call);box-shadow:0 0 0 1px var(--call-dim), var(--shadow);}
+  #orderQtyOverlay.dir-sell .alert-popover{border-color:var(--put);box-shadow:0 0 0 1px var(--put-dim), var(--shadow);}
+  #orderQtyOverlay.dir-buy #orderQtyTitle{color:var(--call);}
+  #orderQtyOverlay.dir-sell #orderQtyTitle{color:var(--put);}
+  #orderQtyConfirmBtn.buy-btn{background:var(--call);border-color:var(--call);color:#04120f;}
+  #orderQtyConfirmBtn.buy-btn:hover{filter:brightness(1.08);}
+  #orderQtyConfirmBtn.sell-btn{background:var(--put);border-color:var(--put);color:#fff;}
+  #orderQtyConfirmBtn.sell-btn:hover{filter:brightness(1.08);}
+  #orderQtyConfirmBtn:disabled{opacity:.45;cursor:not-allowed;filter:none;}
 
-  .log-table{width:100%;border-collapse:collapse;font-family:var(--mono);font-size:11px;}
-  .log-table th{text-align:left;color:var(--muted);font-weight:700;padding:5px 7px;border-bottom:1px solid var(--border);position:sticky;top:0;background:var(--surface);}
-  .log-table td{padding:6px 7px;border-bottom:1px solid var(--border);vertical-align:middle;font-variant-numeric:tabular-nums;}
-  /* fix: log rows no longer wrap out of line with their column labels */
-  .log-table{table-layout:fixed;}
-  .log-table col.lg-time{width:13%;}
-  .log-table col.lg-event{width:17%;}
-  .log-table col.lg-sym{width:26%;}
-  .log-table col.lg-side{width:9%;}
-  .log-table col.lg-detail{width:35%;}
-  .log-table th,.log-table td{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-  .log-table td.lg-detail-cell{white-space:normal;word-break:break-word;line-height:1.45;}
-  .log-table td.lg-side-cell{text-transform:uppercase;font-weight:800;}
-  .log-table tbody tr:hover td{background:var(--surface3);}
+  .acct-table{width:100%;border-collapse:separate;border-spacing:0;margin-top:8px;font-family:var(--mono);font-size:11.5px;table-layout:fixed;}
+  .acct-table th{text-align:left;color:var(--muted);font-weight:700;padding:6px 8px;border-bottom:1px solid var(--border);white-space:nowrap;vertical-align:middle;background:var(--surface2);}
+  .acct-table td{padding:6px 8px;border-bottom:1px solid var(--border-soft);vertical-align:middle;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--text);}
+  .acct-table tbody tr:hover td{background:var(--surface2);}
+  .acct-table-wrap{overflow-x:auto;border:1px solid var(--border);border-radius:8px;margin-top:6px;}
+  .acct-summary-row{display:flex;justify-content:space-between;align-items:center;font-family:var(--mono);font-size:12.5px;padding:6px 0;border-bottom:1px solid var(--border-soft);}
+  .acct-summary-row:last-child{border-bottom:none;}
+  .acct-summary-row b{color:var(--text);}
+  .acct-section-title{font-size:11px;color:var(--muted);font-weight:800;text-transform:uppercase;letter-spacing:.05em;margin:14px 0 6px;}
+
+  .log-table{width:100%;border-collapse:separate;border-spacing:0;font-family:var(--mono);font-size:11px;table-layout:fixed;}
+  .log-table th{text-align:left;color:var(--muted);font-weight:700;padding:7px 8px;border-bottom:1px solid var(--border);position:sticky;top:0;background:var(--surface2);white-space:nowrap;vertical-align:middle;z-index:1;}
+  .log-table td{padding:7px 8px;border-bottom:1px solid var(--border-soft);vertical-align:middle;color:var(--text);}
+  .log-table td:nth-child(1){width:72px;white-space:nowrap;}
+  .log-table td:nth-child(2){width:110px;white-space:nowrap;}
+  .log-table td:nth-child(3){width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .log-table td:nth-child(4){width:52px;white-space:nowrap;text-transform:uppercase;font-weight:700;}
+  .log-table td:nth-child(5){word-break:break-word;white-space:normal;line-height:1.35;}
+  .log-table tbody tr:hover td{background:var(--surface2);}
   .log-badge{display:inline-block;padding:2px 7px;border-radius:5px;font-size:10px;font-weight:800;letter-spacing:.02em;white-space:nowrap;}
   .log-badge.ok{background:rgba(60,190,120,.15);color:var(--call);}
   .log-badge.err{background:rgba(242,84,91,.15);color:var(--put);}
@@ -997,7 +977,7 @@
 
     <p class="note" id="orderQtyErr" style="color:var(--put);display:none;margin-top:8px;"></p>
     <div class="btnrow">
-      <button class="save-btn" id="orderQtyConfirmBtn">Place order</button>
+      <button class="save-btn buy-btn" id="orderQtyConfirmBtn">BUY</button>
       <button class="cancel-btn" id="orderQtyCancelBtn">Cancel</button>
     </div>
   </div>
@@ -1278,7 +1258,7 @@ function buildSpreadBuilderHTML(n){
           <span class="strike-count-badge" id="callStrikeCount${n}">0 strikes</span>
           <div class="inline-controls">
             <div class="mini-field"><label>Steps</label><input type="number" id="callSteps${n}" step="1" min="0" placeholder="—" title="Sets the ± amount for Gap's keyboard Up/Down arrow keys"></div>
-            <div class="mini-field font-field"><label>Font <span class="font-val" id="spFontVal${n}">11.5</span></label><input type="range" id="spFontSize${n}" min="9" max="17" step="0.5" value="11.5" title="Font size for this builder's CALL + PUT tables"></div>
+            <div class="mini-field"><label>Font</label><input type="number" id="callFont${n}" step="0.5" min="9" max="16" value="11.5" title="Spread table font size (px) for this builder"></div>
             <div class="mini-field"><label>Gap</label><input type="number" id="callGap${n}" step="1"></div>
             <div class="mini-field"><label>Ratio</label><input type="number" id="callRatio${n}" step="0.01" value="3"></div>
           </div>
@@ -1338,26 +1318,6 @@ function buildSpreadBuilderHTML(n){
   </div>`;
 }
 document.getElementById('spreadBuildersRoot').innerHTML = BUILDER_IDS.map(buildSpreadBuilderHTML).join('');
-
-// ---- per-builder font-size control (lives next to the CALL Steps box and
-// drives both the CALL and PUT tables of that builder). Purely visual. ----
-BUILDER_IDS.forEach(n=>{
-  const input = document.getElementById(`spFontSize${n}`);
-  const valEl = document.getElementById(`spFontVal${n}`);
-  const group = document.querySelector(`.spread-builder-group[data-builder="${n}"]`);
-  if(!input || !group) return;
-  const apply = (v)=>{
-    group.style.setProperty('--sp-font', v + 'px');
-    if(valEl) valEl.textContent = v;
-  };
-  const saved = localStorage.getItem(`doc_sp_font_${n}`);
-  if(saved){ input.value = saved; }
-  apply(input.value);
-  input.addEventListener('input', ()=>{
-    apply(input.value);
-    localStorage.setItem(`doc_sp_font_${n}`, input.value);
-  });
-});
 
 // per-builder state, keyed by builder id
 const spreadState = {};
@@ -1434,6 +1394,30 @@ function loadModeGapRatio(n, mode){
   });
 }
 BUILDER_IDS.forEach(n=> loadModeGapRatio(n, spreadState[n].mode));
+
+// ---- per-builder spread table font size (control lives on CALL side only) ----
+function applyBuilderFont(n, px){
+  const size = (px && !isNaN(px) && px >= 9 && px <= 16) ? px : 11.5;
+  ['call','put'].forEach(side=>{
+    const table = document.getElementById(`${side}SpreadTable${n}`);
+    if(table) table.style.fontSize = size + 'px';
+  });
+}
+BUILDER_IDS.forEach(n=>{
+  const fontInput = document.getElementById(`callFont${n}`);
+  if(!fontInput) return;
+  const saved = localStorage.getItem(`doc_spread_font_${n}`);
+  if(saved !== null) fontInput.value = saved;
+  applyBuilderFont(n, parseFloat(fontInput.value));
+  fontInput.addEventListener('input', ()=>{
+    const v = parseFloat(fontInput.value);
+    if(!isNaN(v)){
+      localStorage.setItem(`doc_spread_font_${n}`, v);
+      applyBuilderFont(n, v);
+    }
+  });
+});
+
 
 const savedActiveExpiry = localStorage.getItem('doc_active_expiry');
 let initialExpiryApplied = false;
@@ -2505,17 +2489,6 @@ function openOrderQtyModal(params){
   const dirLbl = params.dir==='buy' ? 'BUY' : 'SELL';
   const oppLbl = params.dir==='buy' ? 'SELL' : 'BUY';
   document.getElementById('orderQtyTitle').textContent = `${dirLbl} spread: ${fmtStrike(params.s1)}/${params.s2!==null && !isNaN(params.s2) ? fmtStrike(params.s2) : '—'} (${typeLbl})`;
-  // colour the whole order window + CTA by side: green for BUY, red for SELL
-  const isBuy = params.dir === 'buy';
-  const popEl = document.querySelector('#orderQtyOverlay .alert-popover');
-  if(popEl){
-    popEl.classList.toggle('side-buy', isBuy);
-    popEl.classList.toggle('side-sell', !isBuy);
-  }
-  const ctaBtn = document.getElementById('orderQtyConfirmBtn');
-  ctaBtn.classList.toggle('cta-buy', isBuy);
-  ctaBtn.classList.toggle('cta-sell', !isBuy);
-  ctaBtn.textContent = isBuy ? 'Buy spread' : 'Sell spread';
   const specEl = document.getElementById('orderQtySpec');
   if(legs){
     const buySide = legs.buySingle ? {strike:legs.singleStrike,expiry:legs.singleExpiry,mult:1} : {strike:legs.ratioStrike,expiry:legs.ratioExpiry,mult:legs.ratio};
@@ -2530,10 +2503,20 @@ function openOrderQtyModal(params){
   } else {
     specEl.innerHTML = '';
   }
+  // theme the modal + confirm button by direction (green buy / red sell)
+  const overlay = document.getElementById('orderQtyOverlay');
+  overlay.classList.remove('dir-buy','dir-sell');
+  overlay.classList.add(params.dir==='buy' ? 'dir-buy' : 'dir-sell');
+  const confirmBtn = document.getElementById('orderQtyConfirmBtn');
+  confirmBtn.classList.remove('buy-btn','sell-btn');
+  confirmBtn.classList.add(params.dir==='buy' ? 'buy-btn' : 'sell-btn');
+  confirmBtn.textContent = dirLbl;
+  confirmBtn.dataset.dirLabel = dirLbl;
+
   document.getElementById('orderQtyInput').value = '';
   // depth-check band % is "sticky" -- reuse whatever was last set, until changed
   document.getElementById('orderSlippageInput').value = localStorage.getItem('doc_depth_band_pct') || '1.0';
-  document.getElementById('orderQtyOverlay').classList.add('open');
+  overlay.classList.add('open');
   document.getElementById('orderQtyInput').focus();
   setBackendStatus('checking', 'Checking backend…');
   ensureBackendAwake(setBackendStatus);
@@ -2598,7 +2581,8 @@ document.getElementById('orderQtyInput').addEventListener('input', ()=>{
 });
 
 function closeOrderQtyModal(){
-  document.getElementById('orderQtyOverlay').classList.remove('open');
+  const overlay = document.getElementById('orderQtyOverlay');
+  overlay.classList.remove('open','dir-buy','dir-sell');
   currentOrderCtx = null;
   wakeCheckActive = false;
   stopDepthPreviewLoop();
@@ -2657,6 +2641,12 @@ function setBackendStatus(state, text){
   el.style.color = state==='awake' ? 'var(--call)' : state==='failed' ? 'var(--put)' : 'var(--muted)';
   btn.disabled = state !== 'awake';
   btn.style.opacity = state === 'awake' ? '1' : '.5';
+  // restore BUY/SELL label if we were mid-place and status flipped
+  if(state === 'awake' && btn.dataset.dirLabel && !btn.disabled){
+    if(btn.textContent.startsWith('Placing') || btn.textContent === 'Place order'){
+      btn.textContent = btn.dataset.dirLabel;
+    }
+  }
 }
 
 async function submitSpreadOrder(){
@@ -2692,8 +2682,8 @@ async function submitSpreadOrder(){
   const depthBandPct = (parseFloat(depthBandInputVal) || 1.0) / 100;
 
   const btn = document.getElementById('orderQtyConfirmBtn');
-  const original = btn.textContent;
-  btn.textContent = 'Placing buy leg…';
+  const original = btn.dataset.dirLabel || btn.textContent;
+  btn.textContent = 'Placing…';
   btn.disabled = true;
   try{
     const res = await fetch(LIVE.backendUrl.replace(/\/$/, '') + '/api/place-spread', {
@@ -2810,9 +2800,9 @@ async function loadAccountInfo(){
 
     let balHtml = '<div class="acct-section-title">Balances</div>';
     if(data.balances && data.balances.length){
-      balHtml += '<table class="acct-table"><thead><tr><th>Asset</th><th>Balance</th><th>Available</th></tr></thead><tbody>' +
+      balHtml += '<div class="acct-table-wrap"><table class="acct-table"><colgroup><col style="width:30%"><col style="width:35%"><col style="width:35%"></colgroup><thead><tr><th>Asset</th><th>Balance</th><th>Available</th></tr></thead><tbody>' +
         data.balances.map(b=>`<tr><td>${b.asset}</td><td>${Number(b.balance).toLocaleString(undefined,{maximumFractionDigits:4})}</td><td>${Number(b.available_balance).toLocaleString(undefined,{maximumFractionDigits:4})}</td></tr>`).join('') +
-        '</tbody></table>';
+        '</tbody></table></div>';
     } else {
       balHtml += '<p class="note">No non-zero balances.</p>';
     }
@@ -2820,9 +2810,9 @@ async function loadAccountInfo(){
 
     let posHtml = '<div class="acct-section-title">Open positions</div>';
     if(data.positions && data.positions.length){
-      posHtml += '<table class="acct-table"><thead><tr><th>Symbol</th><th>Size</th><th>Entry</th><th>Mark</th><th>uPnL</th></tr></thead><tbody>' +
-        data.positions.map(p=>`<tr><td>${p.symbol}</td><td style="color:${p.size>0?'var(--call)':'var(--put)'}">${p.size>0?'+':''}${p.size}</td><td>${p.entry_price??'—'}</td><td>${p.mark_price??'—'}</td><td>${p.unrealized_pnl??'—'}</td></tr>`).join('') +
-        '</tbody></table>';
+      posHtml += '<div class="acct-table-wrap"><table class="acct-table"><colgroup><col style="width:36%"><col style="width:14%"><col style="width:16%"><col style="width:16%"><col style="width:18%"></colgroup><thead><tr><th>Symbol</th><th>Size</th><th>Entry</th><th>Mark</th><th>uPnL</th></tr></thead><tbody>' +
+        data.positions.map(p=>`<tr><td title="${p.symbol}">${p.symbol}</td><td style="color:${p.size>0?'var(--call)':'var(--put)'}">${p.size>0?'+':''}${p.size}</td><td>${p.entry_price??'—'}</td><td>${p.mark_price??'—'}</td><td>${p.unrealized_pnl??'—'}</td></tr>`).join('') +
+        '</tbody></table></div>';
     } else {
       posHtml += '<p class="note">No open positions.</p>';
     }
@@ -2833,12 +2823,12 @@ async function loadAccountInfo(){
     let riskHtml = '<div class="acct-section-title">Risk &amp; margin (by coin)</div>';
     const coins = data.risk_by_underlying ? Object.keys(data.risk_by_underlying) : [];
     if(coins.length){
-      riskHtml += '<table class="acct-table"><thead><tr><th>Coin</th><th>Position margin</th><th>Init. margin</th><th>Maint. margin</th><th>Delta</th><th>Theta</th><th>Vega</th><th>Gamma</th></tr></thead><tbody>' +
+      riskHtml += '<div class="acct-table-wrap"><table class="acct-table" style="min-width:640px;"><colgroup><col style="width:10%"><col style="width:14%"><col style="width:12%"><col style="width:14%"><col style="width:12%"><col style="width:12%"><col style="width:12%"><col style="width:14%"></colgroup><thead><tr><th>Coin</th><th>Pos. margin</th><th>Init. mgn</th><th>Maint. mgn</th><th>Delta</th><th>Theta</th><th>Vega</th><th>Gamma</th></tr></thead><tbody>' +
         coins.map(c=>{
           const r = data.risk_by_underlying[c];
           const fa = r.fields_available || {};
           return `<tr><td>${c}</td><td>${fmt2(r.margin)}</td><td>${fa.initial_margin ? fmt2(r.initial_margin) : '—'}</td><td>${fa.maintenance_margin ? fmt2(r.maintenance_margin) : '—'}</td><td>${fmt2(r.delta)}</td><td>${fmt2(r.theta)}</td><td>${fmt2(r.vega)}</td><td>${fmt2(r.gamma)}</td></tr>`;
-        }).join('') + '</tbody></table>';
+        }).join('') + '</tbody></table></div>';
     } else {
       riskHtml += '<p class="note">No open positions to compute risk for.</p>';
     }
@@ -2939,14 +2929,14 @@ async function loadOrderLog(){
       const s = summarizeLogEntry(e);
       const t = e.ts ? new Date(e.ts).toLocaleTimeString() : '—';
       return `<tr>
-        <td title="${t}">${t}</td>
+        <td>${t}</td>
         <td><span class="log-badge ${s.badge[0]}">${s.badge[1]}</span></td>
-        <td title="${s.symbol||''}">${s.symbol||''}</td>
-        <td class="lg-side-cell" style="color:${s.side==='buy'?'var(--call)':s.side==='sell'?'var(--put)':'inherit'};">${s.side||''}</td>
-        <td class="lg-detail-cell" title="${(s.detail||'').replace(/"/g,'&quot;')}">${s.detail}</td>
+        <td>${s.symbol||''}</td>
+        <td style="color:${s.side==='buy'?'var(--call)':s.side==='sell'?'var(--put)':'inherit'};">${s.side||''}</td>
+        <td>${s.detail}</td>
       </tr>`;
     }).join('');
-    body.innerHTML = `<table class="log-table"><colgroup><col class="lg-time"><col class="lg-event"><col class="lg-sym"><col class="lg-side"><col class="lg-detail"></colgroup><thead><tr><th>Time</th><th>Event</th><th>Symbol</th><th>Side</th><th>Detail</th></tr></thead><tbody>${rows}</tbody></table>`;
+    body.innerHTML = `<table class="log-table"><colgroup><col style="width:72px"><col style="width:110px"><col style="width:140px"><col style="width:52px"><col></colgroup><thead><tr><th>Time</th><th>Event</th><th>Symbol</th><th>Side</th><th>Detail</th></tr></thead><tbody>${rows}</tbody></table>`;
   } catch(e){
     body.innerHTML = `<p class="note">Network/backend error: ${e.message}</p>`;
   }
