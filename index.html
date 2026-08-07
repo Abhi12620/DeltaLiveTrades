@@ -263,7 +263,10 @@
   .alert-popover .save-btn{background:var(--accent);color:#fff;border-color:var(--accent);}
   .alert-popover .remove-btn{background:var(--surface2);color:#f2545b;}
   .alert-popover .cancel-btn{background:var(--surface2);color:var(--muted);}
-  .settings-modal{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow);width:100%;max-width:440px;padding:18px 20px;max-height:80vh;overflow:auto;}
+  /* min-width:0 is critical: as a flex child the modal's automatic minimum
+     size was content-based and beat max-width, letting wide nowrap tables
+     blow the panel past the viewport (columns were being clipped off-screen). */
+  .settings-modal{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow);width:100%;min-width:0;max-width:440px;padding:18px 20px;max-height:86vh;overflow:auto;overscroll-behavior:contain;}
   .settings-modal h4{font-family:var(--mono);font-size:13.5px;margin-bottom:4px;}
   .settings-modal p.note{color:var(--muted);font-size:11.5px;margin-bottom:12px;line-height:1.5;}
   .settings-modal label{display:block;font-size:11px;color:var(--muted);font-weight:800;text-transform:uppercase;letter-spacing:.05em;margin:10px 0 4px;}
@@ -294,43 +297,95 @@
   #orderQtyConfirmBtn.sell-btn{background:var(--put)!important;border-color:var(--put)!important;color:#fff!important;}
   #orderQtyConfirmBtn:disabled{opacity:.45;cursor:not-allowed;filter:none;}
 
-  /* wide modals for account / order log */
+  /* ===== wide modals for account / order log ===== */
   .settings-modal.acct-modal,
-  .settings-modal.log-modal{max-width:min(920px,96vw)!important;width:100%;}
+  .settings-modal.log-modal{max-width:min(960px,96vw)!important;width:100%;min-width:0;padding:0;overflow:hidden;display:flex;flex-direction:column;max-height:88vh;}
+  .panel-head{padding:16px 20px 13px;border-bottom:1px solid var(--border);background:var(--surface);flex-shrink:0;}
+  .panel-head h4{display:flex;align-items:center;gap:9px;font-family:var(--sans)!important;font-size:14.5px!important;font-weight:800;letter-spacing:-.15px;margin:0 0 5px!important;}
+  .panel-head h4 .ph-ic{width:24px;height:24px;border-radius:7px;background:var(--accent-dim);color:var(--accent);display:inline-flex;align-items:center;justify-content:center;font-size:12px;flex-shrink:0;}
+  .panel-head p.note{margin:0!important;font-size:11.5px;line-height:1.5;}
+  .panel-head .live-chip{margin-left:auto;display:inline-flex;align-items:center;gap:6px;font-family:var(--mono);font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);background:var(--surface2);border:1px solid var(--border);border-radius:999px;padding:3px 9px 3px 7px;}
+  .panel-body{padding:16px 20px;overflow:auto;flex:1;min-height:0;overscroll-behavior:contain;}
+  .panel-foot{display:flex;gap:8px;align-items:center;padding:12px 20px;border-top:1px solid var(--border);background:var(--surface2);flex-shrink:0;}
+  .panel-foot .spacer{margin-left:auto;}
+  .settings-modal .panel-foot button{background:var(--surface);}
+  .settings-modal .panel-foot .test-btn{border-color:var(--accent);color:var(--accent);background:var(--accent-dim);}
+  .settings-modal .panel-foot .test-btn:hover{background:var(--accent);color:#04120f;}
+  .panel-foot .foot-note{font-family:var(--mono);font-size:10.5px;color:var(--muted2);}
 
-  .acct-section-title{font-size:11px;color:var(--muted);font-weight:800;text-transform:uppercase;letter-spacing:.05em;margin:14px 0 6px;}
-  .acct-summary-row{display:grid;grid-template-columns:1fr auto;gap:12px;align-items:center;font-family:var(--mono);font-size:12.5px;padding:7px 0;border-bottom:1px solid var(--border-soft);}
-  .acct-summary-row:last-child{border-bottom:none;}
-  .acct-summary-row b{color:var(--text);text-align:right;}
+  /* KPI cards */
+  .acct-kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;margin-bottom:6px;}
+  .kpi{background:var(--surface3);border:1px solid var(--border);border-radius:10px;padding:11px 13px;min-width:0;}
+  .kpi .k-lbl{font-size:9.5px;font-weight:800;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);margin-bottom:5px;}
+  .kpi .k-val{font-family:var(--mono);font-size:19px;font-weight:700;letter-spacing:-.4px;line-height:1.1;color:var(--text);overflow-wrap:anywhere;}
+  .kpi .k-sub{font-family:var(--mono);font-size:10.5px;color:var(--muted);margin-top:4px;}
+  .kpi.accent{border-left:2px solid var(--accent);}
+  .kpi .k-val.mode{font-size:14px;color:var(--accent);letter-spacing:.06em;}
 
-  .acct-table-wrap{width:100%;border:1px solid var(--border);border-radius:8px;overflow:hidden;margin-top:4px;}
-  .acct-table{width:100%;border-collapse:collapse;table-layout:fixed;font-family:var(--mono);font-size:11px;margin:0;}
-  .acct-table th,.acct-table td{padding:7px 8px;vertical-align:middle;border-bottom:1px solid var(--border-soft);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
-  .acct-table th{background:var(--surface2);color:var(--muted);font-weight:700;text-align:left;}
+  .acct-section-title{display:flex;align-items:center;gap:8px;font-size:10.5px;color:var(--muted);font-weight:800;text-transform:uppercase;letter-spacing:.07em;margin:18px 0 7px;}
+  .acct-section-title::after{content:'';flex:1;height:1px;background:var(--border-soft);}
+  .acct-section-title .cnt{font-family:var(--mono);font-size:10px;font-weight:700;color:var(--muted2);background:var(--surface3);border-radius:5px;padding:1px 6px;letter-spacing:0;}
+
+  /* shared data-table shell — scrolls horizontally instead of clipping */
+  .acct-table-wrap,.log-table-wrap{width:100%;max-width:100%;border:1px solid var(--border);border-radius:10px;overflow:auto;margin-top:4px;background:var(--surface);}
+  .acct-table{width:100%;min-width:520px;border-collapse:separate;border-spacing:0;table-layout:fixed;font-family:var(--mono);font-size:11.5px;margin:0;}
+  .acct-table th,.acct-table td{padding:8px 10px;vertical-align:middle;text-align:left;border-bottom:1px solid var(--border-soft);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .acct-table th{background:var(--surface2);color:var(--muted);font-family:var(--sans);font-weight:800;font-size:9.5px;text-transform:uppercase;letter-spacing:.06em;text-align:left;position:sticky;top:0;z-index:1;}
   .acct-table td{color:var(--text);}
+  .acct-table tbody tr:nth-child(even) td{background:color-mix(in srgb,var(--surface2) 55%,transparent);}
   .acct-table tbody tr:last-child td{border-bottom:none;}
   .acct-table tbody tr:hover td{background:var(--surface2);}
   .acct-table .num{text-align:right;font-variant-numeric:tabular-nums;}
   .acct-table th.num{text-align:right;}
+  .acct-table .sym{font-weight:600;letter-spacing:-.2px;}
+  .acct-table .asset-tag{display:inline-block;font-weight:800;font-size:10.5px;letter-spacing:.04em;background:var(--surface3);border:1px solid var(--border);border-radius:5px;padding:1px 7px;}
+  .acct-table .pos{color:var(--call);font-weight:700;}
+  .acct-table .neg{color:var(--put);font-weight:700;}
+  .acct-table .zero{color:var(--muted);}
+  .acct-table .na{color:var(--muted2);}
 
-  .log-table-wrap{width:100%;border:1px solid var(--border);border-radius:8px;overflow:hidden;}
-  .log-table{width:100%;border-collapse:collapse;table-layout:fixed;font-family:var(--mono);font-size:11px;margin:0;}
-  .log-table th,.log-table td{padding:7px 8px;vertical-align:middle;border-bottom:1px solid var(--border-soft);}
-  .log-table th{background:var(--surface2);color:var(--muted);font-weight:700;text-align:left;position:sticky;top:0;z-index:1;white-space:nowrap;}
+  /* ===== order audit log ===== */
+  .log-table{width:100%;min-width:640px;border-collapse:separate;border-spacing:0;table-layout:fixed;font-family:var(--mono);font-size:11.5px;margin:0;}
+  .log-table th,.log-table td{padding:8px 10px;vertical-align:top;border-bottom:1px solid var(--border-soft);text-align:left;}
+  .log-table th{background:var(--surface2);color:var(--muted);font-family:var(--sans);font-weight:800;font-size:9.5px;text-transform:uppercase;letter-spacing:.06em;position:sticky;top:0;z-index:1;white-space:nowrap;}
   .log-table td{color:var(--text);}
+  .log-table tbody tr:nth-child(even) td{background:color-mix(in srgb,var(--surface2) 55%,transparent);}
   .log-table tbody tr:last-child td{border-bottom:none;}
   .log-table tbody tr:hover td{background:var(--surface2);}
-  .log-table .c-time{width:12%;white-space:nowrap;}
-  .log-table .c-event{width:14%;white-space:nowrap;}
-  .log-table .c-symbol{width:24%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
-  .log-table .c-side{width:8%;white-space:nowrap;text-transform:uppercase;font-weight:700;}
-  .log-table .c-detail{width:42%;word-break:break-word;white-space:normal;line-height:1.35;}
-  #orderLogBody{overflow-x:hidden!important;}
-  .log-badge{display:inline-block;padding:2px 7px;border-radius:5px;font-size:10px;font-weight:800;letter-spacing:.02em;white-space:nowrap;}
-  .log-badge.ok{background:rgba(60,190,120,.15);color:var(--call);}
-  .log-badge.err{background:rgba(242,84,91,.15);color:var(--put);}
-  .log-badge.info{background:var(--surface3);color:var(--muted);}
-  .log-raw{max-height:400px;overflow:auto;background:var(--surface3);border:1px solid var(--border);border-radius:7px;padding:10px;font-size:10.5px;line-height:1.5;white-space:pre-wrap;word-break:break-all;font-family:var(--mono);}
+  .log-table col.c-time{width:104px;}
+  .log-table col.c-event{width:110px;}
+  .log-table col.c-symbol{width:180px;}
+  .log-table col.c-side{width:64px;}
+  .log-table col.c-detail{width:auto;}
+  .log-table td.c-time{white-space:nowrap;color:var(--muted);font-variant-numeric:tabular-nums;}
+  .log-table td.c-time .t-ms{color:var(--muted2);font-size:10px;}
+  .log-table td.c-symbol{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600;letter-spacing:-.2px;}
+  .log-table td.c-detail{word-break:break-word;white-space:normal;line-height:1.45;color:var(--muted);}
+  .log-table td.c-detail b{color:var(--text);font-weight:700;}
+  #orderLogBody{min-width:0;}
+  .side-pill{display:inline-block;font-family:var(--sans);font-size:9.5px;font-weight:800;letter-spacing:.06em;padding:2px 7px;border-radius:5px;border:1px solid transparent;}
+  .side-pill.buy{color:var(--call);background:var(--call-dim);border-color:color-mix(in srgb,var(--call) 40%,transparent);}
+  .side-pill.sell{color:var(--put);background:var(--put-dim);border-color:color-mix(in srgb,var(--put) 40%,transparent);}
+  .log-badge{display:inline-block;padding:2.5px 7px;border-radius:5px;font-family:var(--sans);font-size:9.5px;font-weight:800;letter-spacing:.04em;white-space:nowrap;border:1px solid transparent;}
+  .log-badge.ok{background:var(--call-dim);color:var(--call);border-color:color-mix(in srgb,var(--call) 35%,transparent);}
+  .log-badge.err{background:var(--put-dim);color:var(--put);border-color:color-mix(in srgb,var(--put) 35%,transparent);}
+  .log-badge.info{background:var(--surface3);color:var(--muted);border-color:var(--border);}
+  .log-badge.warn{background:rgba(255,180,60,.14);color:#d99000;border-color:rgba(255,180,60,.45);}
+  [data-theme="dark"] .log-badge.warn,[data-theme="slate"] .log-badge.warn{color:#ffb43c;}
+  .log-raw{max-height:52vh;overflow:auto;background:var(--surface3);border:1px solid var(--border);border-radius:9px;padding:12px;font-size:10.5px;line-height:1.6;white-space:pre-wrap;word-break:break-all;font-family:var(--mono);color:var(--muted);}
+  .log-toolbar{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:12px;}
+  .panel-empty{border:1px dashed var(--border);border-radius:10px;padding:22px 16px;text-align:center;color:var(--muted);font-size:12px;font-family:var(--sans);}
+  .panel-empty .pe-ttl{font-weight:700;color:var(--text);font-size:12.5px;margin-bottom:3px;}
+  .panel-error{border:1px solid color-mix(in srgb,var(--put) 45%,transparent);background:var(--put-dim);color:var(--put);border-radius:9px;padding:11px 13px;font-size:12px;font-weight:600;line-height:1.5;}
+  .panel-loading{display:flex;align-items:center;gap:9px;color:var(--muted);font-size:12px;font-family:var(--sans);padding:14px 2px;}
+  .panel-loading .spin{width:13px;height:13px;border-radius:50%;border:2px solid var(--border);border-top-color:var(--accent);animation:spin .7s linear infinite;}
+  @keyframes spin{to{transform:rotate(360deg);}}
+  .panel-note{color:var(--muted2);font-size:11px;line-height:1.55;margin-top:8px;font-family:var(--sans);}
+
+  @media (max-width:600px){
+    .panel-head,.panel-body,.panel-foot{padding-left:14px;padding-right:14px;}
+    .kpi .k-val{font-size:17px;}
+  }
 
   .tp-banner{display:flex;align-items:center;gap:8px;padding:8px 12px;border-radius:8px;font-size:12.5px;font-weight:700;margin-bottom:10px;}
   .tp-banner.kill{background:rgba(242,84,91,.15);color:var(--put);border:1px solid rgba(242,84,91,.4);}
@@ -1011,32 +1066,47 @@
 </div>
 
 <div class="alert-popover-overlay" id="accountInfoOverlay">
-  <div class="settings-modal acct-modal" style="max-width:min(920px,96vw);">
-    <h4>Delta account — live</h4>
-    <p class="note" id="acctStatus">Loading…</p>
-    <div id="acctSummary"></div>
-    <div id="acctBalances"></div>
-    <div id="acctPositions"></div>
-    <div id="acctRisk"></div>
-    <div class="btnrow">
+  <div class="settings-modal acct-modal">
+    <div class="panel-head">
+      <h4><span class="ph-ic"><svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="1.8" y="4" width="12.4" height="8.5" rx="1.6"/><path d="M1.8 6.8h12.4"/><path d="M10.6 9.8h1.6"/></svg></span>Delta account<span class="live-chip"><span class="dot"></span>Live</span></h4>
+      <p class="note">Balances, open positions and per-coin risk, read straight from your Delta account.</p>
+    </div>
+    <div class="panel-body">
+      <div id="acctStatus"></div>
+      <div id="acctSummary"></div>
+      <div id="acctBalances"></div>
+      <div id="acctPositions"></div>
+      <div id="acctRisk"></div>
+    </div>
+    <div class="panel-foot">
       <button class="test-btn" id="acctRefreshBtn">Refresh</button>
+      <span class="foot-note" id="acctUpdatedAt"></span>
+      <span class="spacer"></span>
       <button id="acctCloseBtn">Close</button>
     </div>
   </div>
 </div>
 
 <div class="alert-popover-overlay" id="orderLogOverlay">
-  <div class="settings-modal log-modal" style="max-width:min(920px,96vw);">
-    <h4>Order audit log</h4>
-    <p class="note">Every order attempt/result, logged server-side. Lives on Render's local disk — survives normal operation but resets on redeploy.</p>
-    <label class="trade-col-toggle" style="margin:6px 0 10px;">
-      <input type="checkbox" id="orderLogRawToggle">
-      <span class="tct-track"><span class="tct-thumb"></span></span>
-      <span class="tct-label">Show raw JSON instead</span>
-    </label>
-    <div id="orderLogBody" style="max-height:400px;overflow:auto;"></div>
-    <div class="btnrow">
+  <div class="settings-modal log-modal">
+    <div class="panel-head">
+      <h4><span class="ph-ic"><svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M3 4h10M3 8h10M3 12h6"/></svg></span>Order audit log<span class="live-chip">server-side</span></h4>
+      <p class="note">Every order attempt and result, logged on the backend. Lives on Render's local disk — survives normal operation but resets on redeploy.</p>
+    </div>
+    <div class="panel-body">
+      <div class="log-toolbar">
+        <label class="trade-col-toggle" style="margin:0;">
+          <input type="checkbox" id="orderLogRawToggle">
+          <span class="tct-track"><span class="tct-thumb"></span></span>
+          <span class="tct-label">Raw JSON</span>
+        </label>
+      </div>
+      <div id="orderLogBody"></div>
+    </div>
+    <div class="panel-foot">
       <button class="test-btn" id="orderLogRefreshBtn">Refresh</button>
+      <span class="foot-note" id="orderLogCount"></span>
+      <span class="spacer"></span>
       <button id="orderLogCloseBtn">Close</button>
     </div>
   </div>
@@ -2769,8 +2839,34 @@ document.getElementById('liveTestBtn').addEventListener('click', async ()=>{
 });
 
 // ---- account info panel: live balances / margin mode / positions ----
-function fmtUsd(n){ return n==null || isNaN(n) ? '—' : '$' + Number(n).toLocaleString('en-US', {maximumFractionDigits:2}); }
+function fmtUsd(n){ return n==null || isNaN(n) ? '—' : '$' + Number(n).toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2}); }
 function fmtInr(n){ return n==null || isNaN(n) ? '—' : '₹' + Number(n).toLocaleString('en-IN', {maximumFractionDigits:0}); }
+// display-only helpers so raw API floats (e.g. 47.172839506172839506) never
+// leak into the UI as unreadable 20-digit strings
+function escHtml(s){ return String(s==null?'':s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function isNum(n){ return !(n==null || n==='' || isNaN(Number(n))); }
+function fmtPrice(n){
+  if(!isNum(n)) return '<span class="na">—</span>';
+  const v = Number(n), a = Math.abs(v);
+  const dp = a>=100 ? 2 : a>=1 ? 2 : a>0 ? 4 : 2;
+  return v.toLocaleString('en-US', {minimumFractionDigits:dp, maximumFractionDigits:dp});
+}
+function fmtQty(n, dp=4){
+  if(!isNum(n)) return '<span class="na">—</span>';
+  return Number(n).toLocaleString('en-US', {minimumFractionDigits:Math.min(2,dp), maximumFractionDigits:dp});
+}
+function fmtSigned(n, dp=2){
+  if(!isNum(n)) return '<span class="na">—</span>';
+  const v = Number(n);
+  const cls = v>0 ? 'pos' : v<0 ? 'neg' : 'zero';
+  const txt = (v>0?'+':'') + v.toLocaleString('en-US', {minimumFractionDigits:dp, maximumFractionDigits:dp});
+  return `<span class="${cls}">${txt}</span>`;
+}
+function fmtGreek(n, dp=2){
+  if(!isNum(n)) return '<span class="na">—</span>';
+  const v = Number(n);
+  return `<span class="${v>0?'pos':v<0?'neg':'zero'}">${v.toLocaleString('en-US',{minimumFractionDigits:dp,maximumFractionDigits:dp})}</span>`;
+}
 
 async function loadAccountInfo(){
   const statusEl = document.getElementById('acctStatus');
@@ -2778,12 +2874,14 @@ async function loadAccountInfo(){
   const balEl = document.getElementById('acctBalances');
   const posEl = document.getElementById('acctPositions');
   const riskEl = document.getElementById('acctRisk');
+  const stampEl = document.getElementById('acctUpdatedAt');
   if(!LIVE.backendUrl || !LIVE.appSecret){
-    statusEl.textContent = 'Live order backend not configured — click "🔴 Live orders" first.';
+    statusEl.innerHTML = '<div class="panel-empty"><div class="pe-ttl">Backend not configured</div>Open “🔴 Live orders” and set your backend URL + passphrase first.</div>';
     summaryEl.innerHTML = ''; balEl.innerHTML = ''; posEl.innerHTML = ''; riskEl.innerHTML = '';
+    if(stampEl) stampEl.textContent = '';
     return;
   }
-  statusEl.textContent = 'Loading…';
+  statusEl.innerHTML = '<div class="panel-loading"><span class="spin"></span>Fetching account state…</div>';
   summaryEl.innerHTML = ''; balEl.innerHTML = ''; posEl.innerHTML = ''; riskEl.innerHTML = '';
   try{
     const res = await fetch(LIVE.backendUrl.replace(/\/$/, '') + '/api/account-info', {
@@ -2791,65 +2889,71 @@ async function loadAccountInfo(){
     });
     const data = await res.json();
     if(!data.ok){
-      statusEl.textContent = 'Error: ' + (data.error || 'unknown');
+      statusEl.innerHTML = `<div class="panel-error">Couldn’t load account — ${escHtml(data.error || 'unknown error')}</div>`;
       return;
     }
-    statusEl.textContent = '';
+    statusEl.innerHTML = '';
+    if(stampEl) stampEl.textContent = 'Updated ' + new Date().toLocaleTimeString('en-GB');
 
     summaryEl.innerHTML = `
-      <div class="acct-summary-row"><span>Margin mode</span><b>${(data.margin_mode||'unknown').toUpperCase()}</b></div>
-      <div class="acct-summary-row"><span>Net equity (USD)</span><b>${fmtUsd(data.net_equity_usd)}</b></div>
-      <div class="acct-summary-row"><span>Net equity (INR, approx.)</span><b>${fmtInr(data.net_equity_inr)}</b></div>
-    ` + (data.margin_mode_note ? `<p class="note" style="margin-top:4px;">${data.margin_mode_note}</p>` : '');
+      <div class="acct-kpis">
+        <div class="kpi accent">
+          <div class="k-lbl">Net equity · USD</div>
+          <div class="k-val">${fmtUsd(data.net_equity_usd)}</div>
+          <div class="k-sub">${fmtInr(data.net_equity_inr)} approx.</div>
+        </div>
+        <div class="kpi">
+          <div class="k-lbl">Margin mode</div>
+          <div class="k-val mode">${escHtml((data.margin_mode||'unknown').toUpperCase())}</div>
+          <div class="k-sub">${(data.positions||[]).length} open position${(data.positions||[]).length===1?'':'s'}</div>
+        </div>
+      </div>
+    ` + (data.margin_mode_note ? `<p class="panel-note">${data.margin_mode_note}</p>` : '');
 
-    const fmtN = (n,d=4) => (n==null || n==='' || isNaN(Number(n))) ? '—' : Number(n).toLocaleString(undefined,{maximumFractionDigits:d});
-    let balHtml = '<div class="acct-section-title">Balances</div>';
-    if(data.balances && data.balances.length){
-      balHtml += `<div class="acct-table-wrap"><table class="acct-table">
-        <colgroup><col style="width:34%"><col style="width:33%"><col style="width:33%"></colgroup>
+    const bals = data.balances || [];
+    let balHtml = `<div class="acct-section-title">Balances${bals.length?`<span class="cnt">${bals.length}</span>`:''}</div>`;
+    if(bals.length){
+      balHtml += `<div class="acct-table-wrap"><table class="acct-table" style="min-width:420px;">
+        <colgroup><col style="width:28%"><col style="width:36%"><col style="width:36%"></colgroup>
         <thead><tr><th>Asset</th><th class="num">Balance</th><th class="num">Available</th></tr></thead>
         <tbody>` +
-        data.balances.map(b=>`<tr>
-          <td>${b.asset??'—'}</td>
-          <td class="num">${fmtN(b.balance,4)}</td>
-          <td class="num">${fmtN(b.available_balance,4)}</td>
+        bals.map(b=>`<tr>
+          <td><span class="asset-tag">${escHtml(b.asset??'—')}</span></td>
+          <td class="num">${fmtQty(b.balance,4)}</td>
+          <td class="num">${fmtQty(b.available_balance,4)}</td>
         </tr>`).join('') +
         `</tbody></table></div>`;
     } else {
-      balHtml += '<p class="note">No non-zero balances.</p>';
+      balHtml += '<div class="panel-empty">No non-zero balances.</div>';
     }
     balEl.innerHTML = balHtml;
 
-    let posHtml = '<div class="acct-section-title">Open positions</div>';
-    if(data.positions && data.positions.length){
-      posHtml += `<div class="acct-table-wrap"><table class="acct-table">
-        <colgroup><col style="width:36%"><col style="width:12%"><col style="width:18%"><col style="width:17%"><col style="width:17%"></colgroup>
+    const poss = data.positions || [];
+    let posHtml = `<div class="acct-section-title">Open positions${poss.length?`<span class="cnt">${poss.length}</span>`:''}</div>`;
+    if(poss.length){
+      posHtml += `<div class="acct-table-wrap"><table class="acct-table" style="min-width:600px;">
+        <colgroup><col style="width:34%"><col style="width:12%"><col style="width:18%"><col style="width:18%"><col style="width:18%"></colgroup>
         <thead><tr><th>Symbol</th><th class="num">Size</th><th class="num">Entry</th><th class="num">Mark</th><th class="num">uPnL</th></tr></thead>
         <tbody>` +
-        data.positions.map(p=>{
-          const sz = Number(p.size);
-          const szColor = sz>0 ? 'var(--call)' : sz<0 ? 'var(--put)' : 'inherit';
-          const szTxt = isNaN(sz) ? '—' : ((sz>0?'+':'') + sz);
-          return `<tr>
-            <td title="${p.symbol||''}">${p.symbol??'—'}</td>
-            <td class="num" style="color:${szColor}">${szTxt}</td>
-            <td class="num">${fmtN(p.entry_price,2)}</td>
-            <td class="num">${fmtN(p.mark_price,2)}</td>
-            <td class="num">${fmtN(p.unrealized_pnl,2)}</td>
-          </tr>`;
-        }).join('') +
+        poss.map(p=>`<tr>
+            <td class="sym" title="${escHtml(p.symbol||'')}">${escHtml(p.symbol??'—')}</td>
+            <td class="num">${fmtSigned(p.size,0)}</td>
+            <td class="num">${fmtPrice(p.entry_price)}</td>
+            <td class="num">${fmtPrice(p.mark_price)}</td>
+            <td class="num">${fmtSigned(p.unrealized_pnl,2)}</td>
+          </tr>`).join('') +
         `</tbody></table></div>`;
     } else {
-      posHtml += '<p class="note">No open positions.</p>';
+      posHtml += '<div class="panel-empty">No open positions.</div>';
     }
-    if(data.positions_note) posHtml += `<p class="note">${data.positions_note}</p>`;
+    if(data.positions_note) posHtml += `<p class="panel-note">${data.positions_note}</p>`;
     posEl.innerHTML = posHtml;
 
-    let riskHtml = '<div class="acct-section-title">Risk &amp; margin (by coin)</div>';
     const coins = data.risk_by_underlying ? Object.keys(data.risk_by_underlying) : [];
+    let riskHtml = `<div class="acct-section-title">Risk &amp; margin by coin${coins.length?`<span class="cnt">${coins.length}</span>`:''}</div>`;
     if(coins.length){
-      riskHtml += `<div class="acct-table-wrap"><table class="acct-table">
-        <colgroup><col style="width:10%"><col style="width:13%"><col style="width:13%"><col style="width:13%"><col style="width:13%"><col style="width:13%"><col style="width:12%"><col style="width:13%"></colgroup>
+      riskHtml += `<div class="acct-table-wrap"><table class="acct-table" style="min-width:720px;">
+        <colgroup><col style="width:11%"><col style="width:13%"><col style="width:13%"><col style="width:14%"><col style="width:12%"><col style="width:12%"><col style="width:12%"><col style="width:13%"></colgroup>
         <thead><tr>
           <th>Coin</th>
           <th class="num">Pos. mgn</th>
@@ -2865,24 +2969,24 @@ async function loadAccountInfo(){
           const r = data.risk_by_underlying[c];
           const fa = r.fields_available || {};
           return `<tr>
-            <td>${c}</td>
-            <td class="num">${fmtN(r.margin,2)}</td>
-            <td class="num">${fa.initial_margin ? fmtN(r.initial_margin,2) : '—'}</td>
-            <td class="num">${fa.maintenance_margin ? fmtN(r.maintenance_margin,2) : '—'}</td>
-            <td class="num">${fmtN(r.delta,2)}</td>
-            <td class="num">${fmtN(r.theta,2)}</td>
-            <td class="num">${fmtN(r.vega,2)}</td>
-            <td class="num">${fmtN(r.gamma,4)}</td>
+            <td><span class="asset-tag">${escHtml(c)}</span></td>
+            <td class="num">${fmtQty(r.margin,2)}</td>
+            <td class="num">${fa.initial_margin ? fmtQty(r.initial_margin,2) : '<span class="na">—</span>'}</td>
+            <td class="num">${fa.maintenance_margin ? fmtQty(r.maintenance_margin,2) : '<span class="na">—</span>'}</td>
+            <td class="num">${fmtGreek(r.delta,2)}</td>
+            <td class="num">${fmtGreek(r.theta,2)}</td>
+            <td class="num">${fmtGreek(r.vega,2)}</td>
+            <td class="num">${fmtGreek(r.gamma,4)}</td>
           </tr>`;
         }).join('') +
         `</tbody></table></div>`;
     } else {
-      riskHtml += '<p class="note">No open positions to compute risk for.</p>';
+      riskHtml += '<div class="panel-empty">No open positions to compute risk for.</div>';
     }
-    if(data.risk_note) riskHtml += `<p class="note" style="margin-top:6px;">${data.risk_note}</p>`;
+    if(data.risk_note) riskHtml += `<p class="panel-note">${data.risk_note}</p>`;
     riskEl.innerHTML = riskHtml;
   } catch(e){
-    statusEl.textContent = 'Network/backend error: ' + e.message;
+    statusEl.innerHTML = `<div class="panel-error">Network / backend error — ${escHtml(e.message)}</div>`;
   }
 }
 document.getElementById('acctRefreshBtn').addEventListener('click', loadAccountInfo);
@@ -2928,77 +3032,84 @@ function summarizeLogEntry(e){
   const f = e; // shorthand
   switch(e.event){
     case 'spread_request':
-      return { badge:['info','REQUEST'], symbol:'', side:'', detail:`BUY ${f.buy_leg?.symbol} ×${f.buy_leg?.size}  →  SELL ${f.sell_leg?.symbol} ×${f.sell_leg?.size}  (ratio ${f.ratio})` };
+      return { badge:['info','REQUEST'], symbol:'', side:'', detail:`<span class="side-pill buy">BUY</span> <b>${escHtml(f.buy_leg?.symbol)}</b> ×${escHtml(f.buy_leg?.size)} → <span class="side-pill sell">SELL</span> <b>${escHtml(f.sell_leg?.symbol)}</b> ×${escHtml(f.sell_leg?.size)} · ratio <b>${escHtml(f.ratio)}</b>` };
     case 'precheck_fail':
-      return { badge:['err','DEPTH FAIL'], symbol:'', side:'', detail:`BUY avail ${f.buy_precheck?.available ?? '?'} · SELL avail ${f.sell_precheck?.available ?? '?'} — nothing placed` };
+      return { badge:['err','DEPTH FAIL'], symbol:'', side:'', detail:`BUY avail <b>${escHtml(f.buy_precheck?.available ?? '?')}</b> · SELL avail <b>${escHtml(f.sell_precheck?.available ?? '?')}</b> — nothing placed` };
     case 'margin_precheck_block':
-      return { badge:['err','MARGIN BLOCK'], symbol:'', side:'', detail:`Available balance ${f.available_balance} — refused` };
+      return { badge:['err','MARGIN BLOCK'], symbol:'', side:'', detail:`Available balance <b>${escHtml(f.available_balance)}</b> — refused` };
     case 'kill_switch_block':
       return { badge:['err','KILL SWITCH'], symbol:'', side:'', detail:'All orders blocked (kill switch is ON)' };
     case 'order_attempt':
-      return { badge:['info','ATTEMPT'], symbol:f.symbol, side:f.side, detail:`size ${f.size} · depth avail ${f.depth_available ?? '?'}` };
+      return { badge:['info','ATTEMPT'], symbol:f.symbol, side:f.side, detail:`size <b>${escHtml(f.size)}</b> · depth avail <b>${escHtml(f.depth_available ?? '?')}</b>` };
     case 'order_reject':
-      return { badge:['err','REJECTED'], symbol:f.symbol, side:f.side, detail: JSON.stringify(f.response?.error || f.response || '').slice(0,140) };
+      return { badge:['err','REJECTED'], symbol:f.symbol, side:f.side, detail: escHtml(JSON.stringify(f.response?.error || f.response || '').slice(0,220)) };
     case 'order_result':
-      return { badge:[f.ok?'ok':'err', f.ok?'FILLED':'NO FILL'], symbol:f.symbol, side:f.side, detail:`${f.filled_size}/${f.requested_size} @ ${f.avg_price ?? '—'} (${f.state ?? '?'})` };
+      return { badge:[f.ok?'ok':'err', f.ok?'FILLED':'NO FILL'], symbol:f.symbol, side:f.side, detail:`filled <b>${escHtml(f.filled_size)}/${escHtml(f.requested_size)}</b> @ <b>${escHtml(f.avg_price ?? '—')}</b> · ${escHtml(f.state ?? '?')}` };
     case 'dry_run_order':
-      return { badge:['ok','🧪 DRY-RUN'], symbol:f.symbol, side:f.side, detail:`simulated ${f.filled_size}/${f.requested_size} @ ${f.avg_price ?? '—'}` };
+      return { badge:['warn','DRY-RUN'], symbol:f.symbol, side:f.side, detail:`simulated <b>${escHtml(f.filled_size)}/${escHtml(f.requested_size)}</b> @ <b>${escHtml(f.avg_price ?? '—')}</b>` };
     case 'inter_leg_delay':
-      return { badge:['info','DELAY'], symbol:'', side:'', detail:`${f.delay_ms}ms pause before sell leg` };
+      return { badge:['info','DELAY'], symbol:'', side:'', detail:`<b>${escHtml(f.delay_ms)}ms</b> pause before sell leg` };
     case 'settings_updated':
-      return { badge:['info','SETTINGS'], symbol:'', side:'', detail: JSON.stringify(f.settings).slice(0,140) };
+      return { badge:['info','SETTINGS'], symbol:'', side:'', detail: escHtml(JSON.stringify(f.settings).slice(0,220)) };
     default:
-      return { badge:['info', e.event?.toUpperCase() || 'EVENT'], symbol:f.symbol||'', side:f.side||'', detail: JSON.stringify(f).slice(0,140) };
+      return { badge:['info', e.event?.toUpperCase() || 'EVENT'], symbol:f.symbol||'', side:f.side||'', detail: escHtml(JSON.stringify(f).slice(0,220)) };
   }
 }
 async function loadOrderLog(){
   const body = document.getElementById('orderLogBody');
+  const cntEl = document.getElementById('orderLogCount');
+  const setCount = (t)=>{ if(cntEl) cntEl.textContent = t; };
   if(!LIVE.backendUrl || !LIVE.appSecret){
-    body.innerHTML = '<p class="note">Live order backend not configured — click "🔴 Live orders" first.</p>';
+    body.innerHTML = '<div class="panel-empty"><div class="pe-ttl">Backend not configured</div>Open “🔴 Live orders” and set your backend URL + passphrase first.</div>';
+    setCount('');
     return;
   }
-  body.innerHTML = '<p class="note">Loading…</p>';
+  body.innerHTML = '<div class="panel-loading"><span class="spin"></span>Loading audit trail…</div>';
   try{
     const res = await fetch(LIVE.backendUrl.replace(/\/$/, '') + '/api/order-log?n=150', {
       headers: { 'X-App-Secret': LIVE.appSecret },
     });
     const data = await res.json();
-    if(!data.ok){ body.innerHTML = `<p class="note">Error: ${data.error || 'unknown'}</p>`; return; }
-    if(!data.entries.length){ body.innerHTML = '<p class="note">No order attempts logged yet.</p>'; return; }
+    if(!data.ok){ body.innerHTML = `<div class="panel-error">Couldn’t load log — ${escHtml(data.error || 'unknown error')}</div>`; setCount(''); return; }
+    if(!data.entries.length){ body.innerHTML = '<div class="panel-empty"><div class="pe-ttl">Nothing logged yet</div>Order attempts and results will appear here as soon as you trade.</div>'; setCount(''); return; }
     const entries = data.entries.slice().reverse();
+    setCount(`${entries.length} event${entries.length===1?'':'s'} · newest first`);
 
     if(document.getElementById('orderLogRawToggle').checked){
-      body.innerHTML = `<div class="log-raw">${entries.map(e=>JSON.stringify(e)).join('\n\n')}</div>`;
+      body.innerHTML = `<div class="log-raw">${escHtml(entries.map(e=>JSON.stringify(e,null,2)).join('\n\n'))}</div>`;
       return;
     }
 
     const rows = entries.map(e=>{
       const s = summarizeLogEntry(e);
-      const t = e.ts ? new Date(e.ts).toLocaleTimeString() : '—';
-      const sideColor = s.side==='buy'?'var(--call)':s.side==='sell'?'var(--put)':'inherit';
+      const d = e.ts ? new Date(e.ts) : null;
+      const t = d ? `${d.toLocaleTimeString('en-GB',{hour12:false})}<span class="t-ms">.${String(d.getMilliseconds()).padStart(3,'0')}</span>` : '—';
+      const side = (s.side||'').toLowerCase();
+      const sideCell = side==='buy' || side==='sell'
+        ? `<span class="side-pill ${side}">${side.toUpperCase()}</span>` : '';
       return `<tr>
         <td class="c-time">${t}</td>
-        <td class="c-event"><span class="log-badge ${s.badge[0]}">${s.badge[1]}</span></td>
-        <td class="c-symbol" title="${s.symbol||''}">${s.symbol||''}</td>
-        <td class="c-side" style="color:${sideColor};">${s.side||''}</td>
+        <td class="c-event"><span class="log-badge ${s.badge[0]}">${escHtml(s.badge[1])}</span></td>
+        <td class="c-symbol" title="${escHtml(s.symbol||'')}">${escHtml(s.symbol||'')}</td>
+        <td class="c-side">${sideCell}</td>
         <td class="c-detail">${s.detail||''}</td>
       </tr>`;
     }).join('');
-    body.innerHTML = `<div class="log-table-wrap"><table class="log-table">
+    body.innerHTML = `<div class="log-table-wrap" style="max-height:52vh;"><table class="log-table">
       <colgroup>
         <col class="c-time"><col class="c-event"><col class="c-symbol"><col class="c-side"><col class="c-detail">
       </colgroup>
       <thead><tr>
-        <th class="c-time">Time</th>
-        <th class="c-event">Event</th>
-        <th class="c-symbol">Symbol</th>
-        <th class="c-side">Side</th>
-        <th class="c-detail">Detail</th>
+        <th>Time</th>
+        <th>Event</th>
+        <th>Symbol</th>
+        <th>Side</th>
+        <th>Detail</th>
       </tr></thead>
       <tbody>${rows}</tbody>
     </table></div>`;
   } catch(e){
-    body.innerHTML = `<p class="note">Network/backend error: ${e.message}</p>`;
+    body.innerHTML = `<div class="panel-error">Network / backend error — ${escHtml(e.message)}</div>`;
   }
 }
 document.getElementById('orderLogRawToggle').addEventListener('change', loadOrderLog);
