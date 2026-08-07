@@ -290,39 +290,42 @@
   #orderQtyOverlay.dir-sell .alert-popover{border-color:var(--put);box-shadow:0 0 0 1px var(--put-dim), var(--shadow);}
   #orderQtyOverlay.dir-buy #orderQtyTitle{color:var(--call);}
   #orderQtyOverlay.dir-sell #orderQtyTitle{color:var(--put);}
-  #orderQtyConfirmBtn.buy-btn{background:var(--call);border-color:var(--call);color:#04120f;}
-  #orderQtyConfirmBtn.buy-btn:hover{filter:brightness(1.08);}
-  #orderQtyConfirmBtn.sell-btn{background:var(--put);border-color:var(--put);color:#fff;}
-  #orderQtyConfirmBtn.sell-btn:hover{filter:brightness(1.08);}
+  #orderQtyConfirmBtn.buy-btn{background:var(--call)!important;border-color:var(--call)!important;color:#04120f!important;}
+  #orderQtyConfirmBtn.sell-btn{background:var(--put)!important;border-color:var(--put)!important;color:#fff!important;}
   #orderQtyConfirmBtn:disabled{opacity:.45;cursor:not-allowed;filter:none;}
 
-  .settings-modal.acct-modal{max-width:min(960px,96vw);width:100%;}
-  .settings-modal.log-modal{max-width:min(960px,96vw);width:100%;}
+  /* wide modals for account / order log */
+  .settings-modal.acct-modal,
+  .settings-modal.log-modal{max-width:min(920px,96vw)!important;width:100%;}
 
-  .acct-table{width:100%;border-collapse:collapse;margin-top:0;font-family:var(--mono);font-size:11px;table-layout:fixed;}
-  .acct-table th{text-align:left;color:var(--muted);font-weight:700;padding:6px 6px;border-bottom:1px solid var(--border);white-space:nowrap;vertical-align:middle;background:var(--surface2);}
-  .acct-table td{padding:6px 6px;border-bottom:1px solid var(--border-soft);vertical-align:middle;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
-  .acct-table tbody tr:hover td{background:var(--surface2);}
-  .acct-table-wrap{overflow:hidden;border:1px solid var(--border);border-radius:8px;margin-top:6px;width:100%;}
-  .acct-summary-row{display:flex;justify-content:space-between;align-items:center;font-family:var(--mono);font-size:12.5px;padding:6px 0;border-bottom:1px solid var(--border-soft);}
-  .acct-summary-row:last-child{border-bottom:none;}
-  .acct-summary-row b{color:var(--text);}
   .acct-section-title{font-size:11px;color:var(--muted);font-weight:800;text-transform:uppercase;letter-spacing:.05em;margin:14px 0 6px;}
+  .acct-summary-row{display:grid;grid-template-columns:1fr auto;gap:12px;align-items:center;font-family:var(--mono);font-size:12.5px;padding:7px 0;border-bottom:1px solid var(--border-soft);}
+  .acct-summary-row:last-child{border-bottom:none;}
+  .acct-summary-row b{color:var(--text);text-align:right;}
 
-  .log-table{width:100%;border-collapse:collapse;font-family:var(--mono);font-size:11px;table-layout:fixed;}
-  .log-table th{text-align:left;color:var(--muted);font-weight:700;padding:6px 6px;border-bottom:1px solid var(--border);position:sticky;top:0;background:var(--surface2);white-space:nowrap;vertical-align:middle;z-index:1;}
-  .log-table td{padding:6px 6px;border-bottom:1px solid var(--border-soft);vertical-align:middle;color:var(--text);}
-  .log-table col.c-time{width:9%;}
-  .log-table col.c-event{width:14%;}
-  .log-table col.c-symbol{width:22%;}
-  .log-table col.c-side{width:8%;}
-  .log-table col.c-detail{width:47%;}
-  .log-table td:nth-child(1),.log-table td:nth-child(2),.log-table td:nth-child(4){white-space:nowrap;}
-  .log-table td:nth-child(3){overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
-  .log-table td:nth-child(4){text-transform:uppercase;font-weight:700;}
-  .log-table td:nth-child(5){word-break:break-word;white-space:normal;line-height:1.35;overflow:hidden;}
+  .acct-table-wrap{width:100%;border:1px solid var(--border);border-radius:8px;overflow:hidden;margin-top:4px;}
+  .acct-table{width:100%;border-collapse:collapse;table-layout:fixed;font-family:var(--mono);font-size:11px;margin:0;}
+  .acct-table th,.acct-table td{padding:7px 8px;vertical-align:middle;border-bottom:1px solid var(--border-soft);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .acct-table th{background:var(--surface2);color:var(--muted);font-weight:700;text-align:left;}
+  .acct-table td{color:var(--text);}
+  .acct-table tbody tr:last-child td{border-bottom:none;}
+  .acct-table tbody tr:hover td{background:var(--surface2);}
+  .acct-table .num{text-align:right;font-variant-numeric:tabular-nums;}
+  .acct-table th.num{text-align:right;}
+
+  .log-table-wrap{width:100%;border:1px solid var(--border);border-radius:8px;overflow:hidden;}
+  .log-table{width:100%;border-collapse:collapse;table-layout:fixed;font-family:var(--mono);font-size:11px;margin:0;}
+  .log-table th,.log-table td{padding:7px 8px;vertical-align:middle;border-bottom:1px solid var(--border-soft);}
+  .log-table th{background:var(--surface2);color:var(--muted);font-weight:700;text-align:left;position:sticky;top:0;z-index:1;white-space:nowrap;}
+  .log-table td{color:var(--text);}
+  .log-table tbody tr:last-child td{border-bottom:none;}
   .log-table tbody tr:hover td{background:var(--surface2);}
-  #orderLogBody{overflow-x:hidden !important;}
+  .log-table .c-time{width:12%;white-space:nowrap;}
+  .log-table .c-event{width:14%;white-space:nowrap;}
+  .log-table .c-symbol{width:24%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .log-table .c-side{width:8%;white-space:nowrap;text-transform:uppercase;font-weight:700;}
+  .log-table .c-detail{width:42%;word-break:break-word;white-space:normal;line-height:1.35;}
+  #orderLogBody{overflow-x:hidden!important;}
   .log-badge{display:inline-block;padding:2px 7px;border-radius:5px;font-size:10px;font-weight:800;letter-spacing:.02em;white-space:nowrap;}
   .log-badge.ok{background:rgba(60,190,120,.15);color:var(--call);}
   .log-badge.err{background:rgba(242,84,91,.15);color:var(--put);}
@@ -1008,7 +1011,7 @@
 </div>
 
 <div class="alert-popover-overlay" id="accountInfoOverlay">
-  <div class="settings-modal acct-modal">
+  <div class="settings-modal acct-modal" style="max-width:min(920px,96vw);">
     <h4>Delta account — live</h4>
     <p class="note" id="acctStatus">Loading…</p>
     <div id="acctSummary"></div>
@@ -1023,7 +1026,7 @@
 </div>
 
 <div class="alert-popover-overlay" id="orderLogOverlay">
-  <div class="settings-modal log-modal">
+  <div class="settings-modal log-modal" style="max-width:min(920px,96vw);">
     <h4>Order audit log</h4>
     <p class="note">Every order attempt/result, logged server-side. Lives on Render's local disk — survives normal operation but resets on redeploy.</p>
     <label class="trade-col-toggle" style="margin:6px 0 10px;">
@@ -1403,7 +1406,7 @@ function loadModeGapRatio(n, mode){
 }
 BUILDER_IDS.forEach(n=> loadModeGapRatio(n, spreadState[n].mode));
 
-// ---- per-builder spread table font size (control lives on CALL side only) ----
+// ---- per-builder spread table font size (control on CALL side only) ----
 function applyBuilderFont(n, px){
   const size = (px && !isNaN(px) && px >= 9 && px <= 16) ? px : 11.5;
   ['call','put'].forEach(side=>{
@@ -2511,7 +2514,6 @@ function openOrderQtyModal(params){
   } else {
     specEl.innerHTML = '';
   }
-  // theme the modal + confirm button by direction (green buy / red sell)
   const overlay = document.getElementById('orderQtyOverlay');
   overlay.classList.remove('dir-buy','dir-sell');
   overlay.classList.add(params.dir==='buy' ? 'dir-buy' : 'dir-sell');
@@ -2800,11 +2802,19 @@ async function loadAccountInfo(){
       <div class="acct-summary-row"><span>Net equity (INR, approx.)</span><b>${fmtInr(data.net_equity_inr)}</b></div>
     ` + (data.margin_mode_note ? `<p class="note" style="margin-top:4px;">${data.margin_mode_note}</p>` : '');
 
+    const fmtN = (n,d=4) => (n==null || n==='' || isNaN(Number(n))) ? '—' : Number(n).toLocaleString(undefined,{maximumFractionDigits:d});
     let balHtml = '<div class="acct-section-title">Balances</div>';
     if(data.balances && data.balances.length){
-      balHtml += '<div class="acct-table-wrap"><table class="acct-table"><colgroup><col style="width:34%"><col style="width:33%"><col style="width:33%"></colgroup><thead><tr><th>Asset</th><th>Balance</th><th>Available</th></tr></thead><tbody>' +
-        data.balances.map(b=>`<tr><td>${b.asset}</td><td>${Number(b.balance).toLocaleString(undefined,{maximumFractionDigits:4})}</td><td>${Number(b.available_balance).toLocaleString(undefined,{maximumFractionDigits:4})}</td></tr>`).join('') +
-        '</tbody></table></div>';
+      balHtml += `<div class="acct-table-wrap"><table class="acct-table">
+        <colgroup><col style="width:34%"><col style="width:33%"><col style="width:33%"></colgroup>
+        <thead><tr><th>Asset</th><th class="num">Balance</th><th class="num">Available</th></tr></thead>
+        <tbody>` +
+        data.balances.map(b=>`<tr>
+          <td>${b.asset??'—'}</td>
+          <td class="num">${fmtN(b.balance,4)}</td>
+          <td class="num">${fmtN(b.available_balance,4)}</td>
+        </tr>`).join('') +
+        `</tbody></table></div>`;
     } else {
       balHtml += '<p class="note">No non-zero balances.</p>';
     }
@@ -2812,25 +2822,60 @@ async function loadAccountInfo(){
 
     let posHtml = '<div class="acct-section-title">Open positions</div>';
     if(data.positions && data.positions.length){
-      posHtml += '<div class="acct-table-wrap"><table class="acct-table"><colgroup><col style="width:40%"><col style="width:12%"><col style="width:16%"><col style="width:16%"><col style="width:16%"></colgroup><thead><tr><th>Symbol</th><th>Size</th><th>Entry</th><th>Mark</th><th>uPnL</th></tr></thead><tbody>' +
-        data.positions.map(p=>`<tr><td title="${p.symbol}">${p.symbol}</td><td style="color:${p.size>0?'var(--call)':'var(--put)'}">${p.size>0?'+':''}${p.size}</td><td>${p.entry_price??'—'}</td><td>${p.mark_price??'—'}</td><td>${p.unrealized_pnl??'—'}</td></tr>`).join('') +
-        '</tbody></table></div>';
+      posHtml += `<div class="acct-table-wrap"><table class="acct-table">
+        <colgroup><col style="width:36%"><col style="width:12%"><col style="width:18%"><col style="width:17%"><col style="width:17%"></colgroup>
+        <thead><tr><th>Symbol</th><th class="num">Size</th><th class="num">Entry</th><th class="num">Mark</th><th class="num">uPnL</th></tr></thead>
+        <tbody>` +
+        data.positions.map(p=>{
+          const sz = Number(p.size);
+          const szColor = sz>0 ? 'var(--call)' : sz<0 ? 'var(--put)' : 'inherit';
+          const szTxt = isNaN(sz) ? '—' : ((sz>0?'+':'') + sz);
+          return `<tr>
+            <td title="${p.symbol||''}">${p.symbol??'—'}</td>
+            <td class="num" style="color:${szColor}">${szTxt}</td>
+            <td class="num">${fmtN(p.entry_price,2)}</td>
+            <td class="num">${fmtN(p.mark_price,2)}</td>
+            <td class="num">${fmtN(p.unrealized_pnl,2)}</td>
+          </tr>`;
+        }).join('') +
+        `</tbody></table></div>`;
     } else {
       posHtml += '<p class="note">No open positions.</p>';
     }
     if(data.positions_note) posHtml += `<p class="note">${data.positions_note}</p>`;
     posEl.innerHTML = posHtml;
 
-    const fmt2 = n => n==null || isNaN(n) ? '—' : Number(n).toLocaleString(undefined,{maximumFractionDigits:2});
     let riskHtml = '<div class="acct-section-title">Risk &amp; margin (by coin)</div>';
     const coins = data.risk_by_underlying ? Object.keys(data.risk_by_underlying) : [];
     if(coins.length){
-      riskHtml += '<div class="acct-table-wrap"><table class="acct-table"><colgroup><col style="width:10%"><col style="width:14%"><col style="width:13%"><col style="width:13%"><col style="width:12%"><col style="width:12%"><col style="width:13%"><col style="width:13%"></colgroup><thead><tr><th>Coin</th><th>Pos. mgn</th><th>Init. mgn</th><th>Maint. mgn</th><th>Delta</th><th>Theta</th><th>Vega</th><th>Gamma</th></tr></thead><tbody>' +
+      riskHtml += `<div class="acct-table-wrap"><table class="acct-table">
+        <colgroup><col style="width:10%"><col style="width:13%"><col style="width:13%"><col style="width:13%"><col style="width:13%"><col style="width:13%"><col style="width:12%"><col style="width:13%"></colgroup>
+        <thead><tr>
+          <th>Coin</th>
+          <th class="num">Pos. mgn</th>
+          <th class="num">Init. mgn</th>
+          <th class="num">Maint. mgn</th>
+          <th class="num">Delta</th>
+          <th class="num">Theta</th>
+          <th class="num">Vega</th>
+          <th class="num">Gamma</th>
+        </tr></thead>
+        <tbody>` +
         coins.map(c=>{
           const r = data.risk_by_underlying[c];
           const fa = r.fields_available || {};
-          return `<tr><td>${c}</td><td>${fmt2(r.margin)}</td><td>${fa.initial_margin ? fmt2(r.initial_margin) : '—'}</td><td>${fa.maintenance_margin ? fmt2(r.maintenance_margin) : '—'}</td><td>${fmt2(r.delta)}</td><td>${fmt2(r.theta)}</td><td>${fmt2(r.vega)}</td><td>${fmt2(r.gamma)}</td></tr>`;
-        }).join('') + '</tbody></table></div>';
+          return `<tr>
+            <td>${c}</td>
+            <td class="num">${fmtN(r.margin,2)}</td>
+            <td class="num">${fa.initial_margin ? fmtN(r.initial_margin,2) : '—'}</td>
+            <td class="num">${fa.maintenance_margin ? fmtN(r.maintenance_margin,2) : '—'}</td>
+            <td class="num">${fmtN(r.delta,2)}</td>
+            <td class="num">${fmtN(r.theta,2)}</td>
+            <td class="num">${fmtN(r.vega,2)}</td>
+            <td class="num">${fmtN(r.gamma,4)}</td>
+          </tr>`;
+        }).join('') +
+        `</tbody></table></div>`;
     } else {
       riskHtml += '<p class="note">No open positions to compute risk for.</p>';
     }
@@ -2930,15 +2975,28 @@ async function loadOrderLog(){
     const rows = entries.map(e=>{
       const s = summarizeLogEntry(e);
       const t = e.ts ? new Date(e.ts).toLocaleTimeString() : '—';
+      const sideColor = s.side==='buy'?'var(--call)':s.side==='sell'?'var(--put)':'inherit';
       return `<tr>
-        <td>${t}</td>
-        <td><span class="log-badge ${s.badge[0]}">${s.badge[1]}</span></td>
-        <td>${s.symbol||''}</td>
-        <td style="color:${s.side==='buy'?'var(--call)':s.side==='sell'?'var(--put)':'inherit'};">${s.side||''}</td>
-        <td>${s.detail}</td>
+        <td class="c-time">${t}</td>
+        <td class="c-event"><span class="log-badge ${s.badge[0]}">${s.badge[1]}</span></td>
+        <td class="c-symbol" title="${s.symbol||''}">${s.symbol||''}</td>
+        <td class="c-side" style="color:${sideColor};">${s.side||''}</td>
+        <td class="c-detail">${s.detail||''}</td>
       </tr>`;
     }).join('');
-    body.innerHTML = `<table class="log-table"><colgroup><col class="c-time"><col class="c-event"><col class="c-symbol"><col class="c-side"><col class="c-detail"></colgroup><thead><tr><th>Time</th><th>Event</th><th>Symbol</th><th>Side</th><th>Detail</th></tr></thead><tbody>${rows}</tbody></table>`;
+    body.innerHTML = `<div class="log-table-wrap"><table class="log-table">
+      <colgroup>
+        <col class="c-time"><col class="c-event"><col class="c-symbol"><col class="c-side"><col class="c-detail">
+      </colgroup>
+      <thead><tr>
+        <th class="c-time">Time</th>
+        <th class="c-event">Event</th>
+        <th class="c-symbol">Symbol</th>
+        <th class="c-side">Side</th>
+        <th class="c-detail">Detail</th>
+      </tr></thead>
+      <tbody>${rows}</tbody>
+    </table></div>`;
   } catch(e){
     body.innerHTML = `<p class="note">Network/backend error: ${e.message}</p>`;
   }
