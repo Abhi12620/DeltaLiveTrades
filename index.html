@@ -296,25 +296,33 @@
   #orderQtyConfirmBtn.sell-btn:hover{filter:brightness(1.08);}
   #orderQtyConfirmBtn:disabled{opacity:.45;cursor:not-allowed;filter:none;}
 
-  .acct-table{width:100%;border-collapse:separate;border-spacing:0;margin-top:8px;font-family:var(--mono);font-size:11.5px;table-layout:fixed;}
-  .acct-table th{text-align:left;color:var(--muted);font-weight:700;padding:6px 8px;border-bottom:1px solid var(--border);white-space:nowrap;vertical-align:middle;background:var(--surface2);}
-  .acct-table td{padding:6px 8px;border-bottom:1px solid var(--border-soft);vertical-align:middle;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--text);}
+  .settings-modal.acct-modal{max-width:min(960px,96vw);width:100%;}
+  .settings-modal.log-modal{max-width:min(960px,96vw);width:100%;}
+
+  .acct-table{width:100%;border-collapse:collapse;margin-top:0;font-family:var(--mono);font-size:11px;table-layout:fixed;}
+  .acct-table th{text-align:left;color:var(--muted);font-weight:700;padding:6px 6px;border-bottom:1px solid var(--border);white-space:nowrap;vertical-align:middle;background:var(--surface2);}
+  .acct-table td{padding:6px 6px;border-bottom:1px solid var(--border-soft);vertical-align:middle;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
   .acct-table tbody tr:hover td{background:var(--surface2);}
-  .acct-table-wrap{overflow-x:auto;border:1px solid var(--border);border-radius:8px;margin-top:6px;}
+  .acct-table-wrap{overflow:hidden;border:1px solid var(--border);border-radius:8px;margin-top:6px;width:100%;}
   .acct-summary-row{display:flex;justify-content:space-between;align-items:center;font-family:var(--mono);font-size:12.5px;padding:6px 0;border-bottom:1px solid var(--border-soft);}
   .acct-summary-row:last-child{border-bottom:none;}
   .acct-summary-row b{color:var(--text);}
   .acct-section-title{font-size:11px;color:var(--muted);font-weight:800;text-transform:uppercase;letter-spacing:.05em;margin:14px 0 6px;}
 
-  .log-table{width:100%;border-collapse:separate;border-spacing:0;font-family:var(--mono);font-size:11px;table-layout:fixed;}
-  .log-table th{text-align:left;color:var(--muted);font-weight:700;padding:7px 8px;border-bottom:1px solid var(--border);position:sticky;top:0;background:var(--surface2);white-space:nowrap;vertical-align:middle;z-index:1;}
-  .log-table td{padding:7px 8px;border-bottom:1px solid var(--border-soft);vertical-align:middle;color:var(--text);}
-  .log-table td:nth-child(1){width:72px;white-space:nowrap;}
-  .log-table td:nth-child(2){width:110px;white-space:nowrap;}
-  .log-table td:nth-child(3){width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
-  .log-table td:nth-child(4){width:52px;white-space:nowrap;text-transform:uppercase;font-weight:700;}
-  .log-table td:nth-child(5){word-break:break-word;white-space:normal;line-height:1.35;}
+  .log-table{width:100%;border-collapse:collapse;font-family:var(--mono);font-size:11px;table-layout:fixed;}
+  .log-table th{text-align:left;color:var(--muted);font-weight:700;padding:6px 6px;border-bottom:1px solid var(--border);position:sticky;top:0;background:var(--surface2);white-space:nowrap;vertical-align:middle;z-index:1;}
+  .log-table td{padding:6px 6px;border-bottom:1px solid var(--border-soft);vertical-align:middle;color:var(--text);}
+  .log-table col.c-time{width:9%;}
+  .log-table col.c-event{width:14%;}
+  .log-table col.c-symbol{width:22%;}
+  .log-table col.c-side{width:8%;}
+  .log-table col.c-detail{width:47%;}
+  .log-table td:nth-child(1),.log-table td:nth-child(2),.log-table td:nth-child(4){white-space:nowrap;}
+  .log-table td:nth-child(3){overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .log-table td:nth-child(4){text-transform:uppercase;font-weight:700;}
+  .log-table td:nth-child(5){word-break:break-word;white-space:normal;line-height:1.35;overflow:hidden;}
   .log-table tbody tr:hover td{background:var(--surface2);}
+  #orderLogBody{overflow-x:hidden !important;}
   .log-badge{display:inline-block;padding:2px 7px;border-radius:5px;font-size:10px;font-weight:800;letter-spacing:.02em;white-space:nowrap;}
   .log-badge.ok{background:rgba(60,190,120,.15);color:var(--call);}
   .log-badge.err{background:rgba(242,84,91,.15);color:var(--put);}
@@ -1000,7 +1008,7 @@
 </div>
 
 <div class="alert-popover-overlay" id="accountInfoOverlay">
-  <div class="settings-modal" style="max-width:560px;">
+  <div class="settings-modal acct-modal">
     <h4>Delta account — live</h4>
     <p class="note" id="acctStatus">Loading…</p>
     <div id="acctSummary"></div>
@@ -1015,7 +1023,7 @@
 </div>
 
 <div class="alert-popover-overlay" id="orderLogOverlay">
-  <div class="settings-modal" style="max-width:760px;">
+  <div class="settings-modal log-modal">
     <h4>Order audit log</h4>
     <p class="note">Every order attempt/result, logged server-side. Lives on Render's local disk — survives normal operation but resets on redeploy.</p>
     <label class="trade-col-toggle" style="margin:6px 0 10px;">
@@ -1257,10 +1265,10 @@ function buildSpreadBuilderHTML(n){
           <span class="spread-title-label" style="color:var(--call)">CALL</span>
           <span class="strike-count-badge" id="callStrikeCount${n}">0 strikes</span>
           <div class="inline-controls">
-            <div class="mini-field"><label>Steps</label><input type="number" id="callSteps${n}" step="1" min="0" placeholder="—" title="Sets the ± amount for Gap's keyboard Up/Down arrow keys"></div>
             <div class="mini-field"><label>Font</label><input type="number" id="callFont${n}" step="0.5" min="9" max="16" value="11.5" title="Spread table font size (px) for this builder"></div>
             <div class="mini-field"><label>Gap</label><input type="number" id="callGap${n}" step="1"></div>
             <div class="mini-field"><label>Ratio</label><input type="number" id="callRatio${n}" step="0.01" value="3"></div>
+            <div class="mini-field"><label>Steps</label><input type="number" id="callSteps${n}" step="1" min="0" placeholder="—" title="Sets the ± amount for Gap's keyboard Up/Down arrow keys"></div>
           </div>
         </div>
         <div class="table-scroll">
@@ -1289,9 +1297,9 @@ function buildSpreadBuilderHTML(n){
           <span class="spread-title-label" style="color:var(--put)">PUT</span>
           <span class="strike-count-badge" id="putStrikeCount${n}">0 strikes</span>
           <div class="inline-controls">
-            <div class="mini-field"><label>Steps</label><input type="number" id="putSteps${n}" step="1" min="0" placeholder="—" title="Sets the ± amount for Gap's keyboard Up/Down arrow keys"></div>
             <div class="mini-field"><label>Gap</label><input type="number" id="putGap${n}" step="1"></div>
             <div class="mini-field"><label>Ratio</label><input type="number" id="putRatio${n}" step="0.01" value="3"></div>
+            <div class="mini-field"><label>Steps</label><input type="number" id="putSteps${n}" step="1" min="0" placeholder="—" title="Sets the ± amount for Gap's keyboard Up/Down arrow keys"></div>
           </div>
         </div>
         <div class="table-scroll">
@@ -2641,12 +2649,6 @@ function setBackendStatus(state, text){
   el.style.color = state==='awake' ? 'var(--call)' : state==='failed' ? 'var(--put)' : 'var(--muted)';
   btn.disabled = state !== 'awake';
   btn.style.opacity = state === 'awake' ? '1' : '.5';
-  // restore BUY/SELL label if we were mid-place and status flipped
-  if(state === 'awake' && btn.dataset.dirLabel && !btn.disabled){
-    if(btn.textContent.startsWith('Placing') || btn.textContent === 'Place order'){
-      btn.textContent = btn.dataset.dirLabel;
-    }
-  }
 }
 
 async function submitSpreadOrder(){
@@ -2800,7 +2802,7 @@ async function loadAccountInfo(){
 
     let balHtml = '<div class="acct-section-title">Balances</div>';
     if(data.balances && data.balances.length){
-      balHtml += '<div class="acct-table-wrap"><table class="acct-table"><colgroup><col style="width:30%"><col style="width:35%"><col style="width:35%"></colgroup><thead><tr><th>Asset</th><th>Balance</th><th>Available</th></tr></thead><tbody>' +
+      balHtml += '<div class="acct-table-wrap"><table class="acct-table"><colgroup><col style="width:34%"><col style="width:33%"><col style="width:33%"></colgroup><thead><tr><th>Asset</th><th>Balance</th><th>Available</th></tr></thead><tbody>' +
         data.balances.map(b=>`<tr><td>${b.asset}</td><td>${Number(b.balance).toLocaleString(undefined,{maximumFractionDigits:4})}</td><td>${Number(b.available_balance).toLocaleString(undefined,{maximumFractionDigits:4})}</td></tr>`).join('') +
         '</tbody></table></div>';
     } else {
@@ -2810,7 +2812,7 @@ async function loadAccountInfo(){
 
     let posHtml = '<div class="acct-section-title">Open positions</div>';
     if(data.positions && data.positions.length){
-      posHtml += '<div class="acct-table-wrap"><table class="acct-table"><colgroup><col style="width:36%"><col style="width:14%"><col style="width:16%"><col style="width:16%"><col style="width:18%"></colgroup><thead><tr><th>Symbol</th><th>Size</th><th>Entry</th><th>Mark</th><th>uPnL</th></tr></thead><tbody>' +
+      posHtml += '<div class="acct-table-wrap"><table class="acct-table"><colgroup><col style="width:40%"><col style="width:12%"><col style="width:16%"><col style="width:16%"><col style="width:16%"></colgroup><thead><tr><th>Symbol</th><th>Size</th><th>Entry</th><th>Mark</th><th>uPnL</th></tr></thead><tbody>' +
         data.positions.map(p=>`<tr><td title="${p.symbol}">${p.symbol}</td><td style="color:${p.size>0?'var(--call)':'var(--put)'}">${p.size>0?'+':''}${p.size}</td><td>${p.entry_price??'—'}</td><td>${p.mark_price??'—'}</td><td>${p.unrealized_pnl??'—'}</td></tr>`).join('') +
         '</tbody></table></div>';
     } else {
@@ -2823,7 +2825,7 @@ async function loadAccountInfo(){
     let riskHtml = '<div class="acct-section-title">Risk &amp; margin (by coin)</div>';
     const coins = data.risk_by_underlying ? Object.keys(data.risk_by_underlying) : [];
     if(coins.length){
-      riskHtml += '<div class="acct-table-wrap"><table class="acct-table" style="min-width:640px;"><colgroup><col style="width:10%"><col style="width:14%"><col style="width:12%"><col style="width:14%"><col style="width:12%"><col style="width:12%"><col style="width:12%"><col style="width:14%"></colgroup><thead><tr><th>Coin</th><th>Pos. margin</th><th>Init. mgn</th><th>Maint. mgn</th><th>Delta</th><th>Theta</th><th>Vega</th><th>Gamma</th></tr></thead><tbody>' +
+      riskHtml += '<div class="acct-table-wrap"><table class="acct-table"><colgroup><col style="width:10%"><col style="width:14%"><col style="width:13%"><col style="width:13%"><col style="width:12%"><col style="width:12%"><col style="width:13%"><col style="width:13%"></colgroup><thead><tr><th>Coin</th><th>Pos. mgn</th><th>Init. mgn</th><th>Maint. mgn</th><th>Delta</th><th>Theta</th><th>Vega</th><th>Gamma</th></tr></thead><tbody>' +
         coins.map(c=>{
           const r = data.risk_by_underlying[c];
           const fa = r.fields_available || {};
@@ -2936,7 +2938,7 @@ async function loadOrderLog(){
         <td>${s.detail}</td>
       </tr>`;
     }).join('');
-    body.innerHTML = `<table class="log-table"><colgroup><col style="width:72px"><col style="width:110px"><col style="width:140px"><col style="width:52px"><col></colgroup><thead><tr><th>Time</th><th>Event</th><th>Symbol</th><th>Side</th><th>Detail</th></tr></thead><tbody>${rows}</tbody></table>`;
+    body.innerHTML = `<table class="log-table"><colgroup><col class="c-time"><col class="c-event"><col class="c-symbol"><col class="c-side"><col class="c-detail"></colgroup><thead><tr><th>Time</th><th>Event</th><th>Symbol</th><th>Side</th><th>Detail</th></tr></thead><tbody>${rows}</tbody></table>`;
   } catch(e){
     body.innerHTML = `<p class="note">Network/backend error: ${e.message}</p>`;
   }
