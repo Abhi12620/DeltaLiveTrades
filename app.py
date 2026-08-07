@@ -53,7 +53,6 @@ def get_active_credentials():
 # JSON file so they survive without needing a Render redeploy. Env vars are
 # only the FIRST-TIME defaults (used if the settings file doesn't exist yet).
 FILL_POLL_ATTEMPTS = 6
-FILL_POLL_DELAY = 0.15   # seconds between order-status polls (market orders resolve almost instantly)
 
 SETTINGS_PATH = os.path.join(os.path.dirname(__file__), "settings.json")
 _settings_lock = threading.Lock()
@@ -61,6 +60,9 @@ _DEFAULT_SETTINGS = {
     "max_lot_size": int(os.environ.get("MAX_LOT_SIZE", "500")),
     "depth_band_pct": float(os.environ.get("DEPTH_BAND_PCT", "1.0")),  # stored as a PERCENT (e.g. 1.0 = 1%)
     "inter_leg_delay_ms": int(os.environ.get("INTER_LEG_DELAY_MS", "0")),  # deliberate pause AFTER the buy leg confirms, BEFORE the sell leg fires (0 = fire as soon as ready)
+    "fill_poll_delay_ms": 50,     # gap between order-status polls while waiting for a fill to confirm
+    "margin_precheck_enabled": True,   # OFF skips the wallet-balance gate entirely (saves a Delta call) -- fine if you trade infrequently and margin is rarely an issue
+    "margin_precheck_cache_seconds": 2.5,  # how long a fetched balance is trusted before refetching
     "active_account": "A",       # which Delta API key/secret pair is currently in use ("A" or "B")
     "dry_run": False,            # if true, every check (margin/depth) still runs for real, but NO real order is sent to Delta -- fully simulated response instead
     "kill_switch": False,        # if true, /api/place-spread refuses everything immediately, no exceptions
@@ -124,17 +126,25 @@ TG_CHAT_ID = os.environ.get("TG_CHAT_ID", "")
 
 
 def send_telegram(text):
+    """Fire-and-forget: runs in a background thread so a slow/hanging
+    Telegram API call never adds latency to the order response itself.
+    The order has already succeeded or failed by the time this fires --
+    the notification is purely informational."""
     if not TG_BOT_TOKEN or not TG_CHAT_ID:
         return False
-    try:
-        SESSION.post(
-            f"https://api.telegram.org/bot{TG_BOT_TOKEN}/sendMessage",
-            json={"chat_id": TG_CHAT_ID, "text": text},
-            timeout=8,
-        )
-        return True
-    except Exception:
-        return False
+
+    def _send():
+        try:
+            SESSION.post(
+                f"https://api.telegram.org/bot{TG_BOT_TOKEN}/sendMessage",
+                json={"chat_id": TG_CHAT_ID, "text": text},
+                timeout=8,
+            )
+        except Exception:
+            pass
+
+    threading.Thread(target=_send, daemon=True).start()
+    return True
 
 
 _NOTIFY_SETTING_KEY = {
@@ -335,19 +345,26 @@ def place_market_leg(symbol, side, size, band_pct=None, dry_run=False):
 
     result = data.get("result", {})
     order_id = result.get("id")
+    poll_delay = load_settings().get("fill_poll_delay_ms", 50) / 1000.0
 
-    # reconcile: poll actual order state instead of trusting the initial ack
+    # reconcile: poll actual order state instead of trusting the initial ack.
+    # Check the initial POST response's own state first (market orders often
+    # resolve fast enough that it's already final) -- only start the
+    # sleep/poll loop if a genuine follow-up check is actually needed.
     filled_size, avg_price, state = 0, None, result.get("state")
-    for _ in range(FILL_POLL_ATTEMPTS):
-        st, odata = _delta_get(f"/v2/orders/{order_id}")
-        if odata.get("success"):
-            r = odata.get("result", {})
-            state = r.get("state")
-            filled_size = int(r.get("size", 0)) - int(r.get("unfilled_size", r.get("size", 0)))
-            avg_price = r.get("average_fill_price")
-            if state in ("closed", "cancelled", "filled"):
-                break
-        time.sleep(FILL_POLL_DELAY)
+    filled_size = int(result.get("size", 0)) - int(result.get("unfilled_size", result.get("size", 0)))
+    avg_price = result.get("average_fill_price")
+    if state not in ("closed", "cancelled", "filled"):
+        for _ in range(FILL_POLL_ATTEMPTS):
+            time.sleep(poll_delay)
+            st, odata = _delta_get(f"/v2/orders/{order_id}")
+            if odata.get("success"):
+                r = odata.get("result", {})
+                state = r.get("state")
+                filled_size = int(r.get("size", 0)) - int(r.get("unfilled_size", r.get("size", 0)))
+                avg_price = r.get("average_fill_price")
+                if state in ("closed", "cancelled", "filled"):
+                    break
 
     ok = filled_size > 0
     leg_result = {
@@ -396,6 +413,29 @@ def get_position_size(symbol):
     return 0.0  # no entry for this symbol = flat
 
 
+def run_reconciliation(buy_leg, sell_leg, buy_result, sell_result, buy_precheck, sell_precheck, settings):
+    """Background-only (see call site) -- compares Delta's actual post-trade
+    position ledger against what the fill responses told us. Any mismatch
+    is logged to the audit trail and alerted via the 'failure' notification
+    channel, since by definition something didn't match our expectations."""
+    notes = []
+    buy_pos_after = get_position_size(buy_leg["symbol"])
+    sell_pos_after = get_position_size(sell_leg["symbol"])
+    buy_pos_before = (buy_precheck or {}).get("position_before")
+    sell_pos_before = (sell_precheck or {}).get("position_before")
+    if buy_pos_before is not None and buy_pos_after is not None:
+        expected = buy_pos_before + buy_result["filled_size"]
+        if abs(buy_pos_after - expected) > 0.01:
+            notes.append(f"{buy_leg['symbol']}: expected position {expected}, Delta shows {buy_pos_after}")
+    if sell_pos_before is not None and sell_pos_after is not None:
+        expected = sell_pos_before - sell_result["filled_size"]
+        if abs(sell_pos_after - expected) > 0.01:
+            notes.append(f"{sell_leg['symbol']}: expected position {expected}, Delta shows {sell_pos_after}")
+    if notes:
+        audit("reconciliation_mismatch", notes=notes)
+        notify_trade_outcome("failure", "⚠️ Post-trade reconciliation mismatch detected (checked after the fact): " + " · ".join(notes), settings=settings)
+
+
 def record_outcome(success):
     """Circuit breaker: tracks consecutive FAILED trades (real ones only --
     dry-run doesn't count, nothing actually happened). After N in a row
@@ -425,7 +465,23 @@ def record_outcome(success):
 
 
 # ==================== margin precheck ====================
-def get_available_balance():
+_balance_cache = {"value": None, "ts": 0}
+_balance_cache_lock = threading.Lock()
+
+
+def get_available_balance(max_age_s=None):
+    """Cached briefly -- this is only used as a coarse "is the wallet
+    obviously empty" gate before firing an order, not an exact real-time
+    figure, so a couple of seconds of staleness is an acceptable trade for
+    skipping a full Delta round-trip on every single order attempt fired
+    in quick succession. Cache duration is adjustable in Trade Params."""
+    if max_age_s is None:
+        max_age_s = load_settings().get("margin_precheck_cache_seconds", 2.5)
+    now = time.time()
+    with _balance_cache_lock:
+        if _balance_cache["value"] is not None and (now - _balance_cache["ts"]) < max_age_s:
+            return _balance_cache["value"], None
+
     st, data = _delta_get("/v2/wallet/balances")
     if not data.get("success"):
         return None, data.get("error")
@@ -435,6 +491,9 @@ def get_available_balance():
             total_avail += float(a.get("available_balance") or 0)
         except (TypeError, ValueError):
             continue
+    with _balance_cache_lock:
+        _balance_cache["value"] = total_avail
+        _balance_cache["ts"] = now
     return total_avail, None
 
 
@@ -498,6 +557,24 @@ def settings_endpoint():
             current["inter_leg_delay_ms"] = v
         except (ValueError, TypeError):
             return jsonify({"ok": False, "error": "inter_leg_delay_ms must be a non-negative integer"}), 400
+    if "fill_poll_delay_ms" in data:
+        try:
+            v = int(data["fill_poll_delay_ms"])
+            if v < 0:
+                raise ValueError()
+            current["fill_poll_delay_ms"] = v
+        except (ValueError, TypeError):
+            return jsonify({"ok": False, "error": "fill_poll_delay_ms must be a non-negative integer"}), 400
+    if "margin_precheck_enabled" in data:
+        current["margin_precheck_enabled"] = bool(data["margin_precheck_enabled"])
+    if "margin_precheck_cache_seconds" in data:
+        try:
+            v = float(data["margin_precheck_cache_seconds"])
+            if v < 0:
+                raise ValueError()
+            current["margin_precheck_cache_seconds"] = v
+        except (ValueError, TypeError):
+            return jsonify({"ok": False, "error": "margin_precheck_cache_seconds must be a non-negative number"}), 400
     if "sell_leg_retries" in data:
         try:
             v = int(data["sell_leg_retries"])
@@ -722,6 +799,47 @@ def precheck_leg(symbol, side, size, band_pct):
     return {"symbol": symbol, "ok": ok, "available": depth["available"], "best_price": depth["best_price"], "position_before": position_before}
 
 
+@app.route("/api/depth-preview", methods=["POST"])
+def depth_preview():
+    """Read-only, no order placement -- lets the dashboard show live
+    orderbook depth for both legs in the order modal BEFORE the user commits,
+    so they can see at a glance whether their requested size looks realistic.
+    Doesn't use or need the margin-precheck / kill-switch / dry-run state --
+    this is purely informational and doesn't touch account credentials
+    beyond the shared app secret gate."""
+    if not APP_SECRET or request.headers.get("X-App-Secret") != APP_SECRET:
+        return jsonify({"ok": False, "error": "unauthorized"}), 401
+
+    data = request.get_json(force=True, silent=True) or {}
+    legs = data.get("legs", [])
+    if not legs or not isinstance(legs, list):
+        return jsonify({"ok": False, "error": "legs array required"}), 400
+
+    settings = load_settings()
+    band_pct = float(data.get("depth_band_pct", settings["depth_band_pct"] / 100.0))
+
+    results = [None] * len(legs)
+
+    def run(i, leg):
+        try:
+            d = check_depth(leg["symbol"], leg["side"], leg.get("size", 1), band_pct)
+            results[i] = {
+                "symbol": leg["symbol"], "side": leg["side"], "requested": leg.get("size", 1),
+                "available": d["available"], "best_price": d["best_price"],
+                "sufficient": d["available"] >= leg.get("size", 1),
+            }
+        except Exception as e:
+            results[i] = {"symbol": leg.get("symbol"), "side": leg.get("side"), "error": str(e), "sufficient": False}
+
+    threads = [threading.Thread(target=run, args=(i, leg)) for i, leg in enumerate(legs)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join(timeout=10)
+
+    return jsonify({"ok": True, "legs": results})
+
+
 @app.route("/api/place-spread", methods=["POST"])
 def place_spread():
     if not APP_SECRET or request.headers.get("X-App-Secret") != APP_SECRET:
@@ -762,18 +880,21 @@ def place_spread():
 
     audit("spread_request", buy_leg=buy_leg, sell_leg=sell_leg, ratio=ratio)
 
-    # ---- margin precheck (soft) ----
+    # ---- margin precheck (soft, toggleable) ----
     # NOTE: this is NOT a precise margin calculator -- Delta's real margin
     # formula for multi-leg options portfolios is complex and not something
     # we recompute here. This only catches the obvious case of an empty/near
-    # -empty wallet before risking a partial-fill situation.
-    avail, bal_err = get_available_balance()
-    if avail is not None and avail <= 0:
-        audit("margin_precheck_block", available_balance=avail)
-        if not dry_run:
-            record_outcome(False)
-            notify_trade_outcome("failure", "❌ Order blocked: available balance is ₹0/$0 — nothing was placed.", settings=settings)
-        return jsonify({"ok": False, "error": "Available balance is ₹0/$0 (or could not be confirmed positive) — refusing to place any leg. Check your Delta wallet."}), 400
+    # -empty wallet before risking a partial-fill situation. Can be switched
+    # off in Trade Params (saves a Delta call) if you trade infrequently
+    # enough that this is rarely the actual blocker.
+    if settings.get("margin_precheck_enabled", True):
+        avail, bal_err = get_available_balance()
+        if avail is not None and avail <= 0:
+            audit("margin_precheck_block", available_balance=avail)
+            if not dry_run:
+                record_outcome(False)
+                notify_trade_outcome("failure", "❌ Order blocked: available balance is ₹0/$0 — nothing was placed.", settings=settings)
+            return jsonify({"ok": False, "error": "Available balance is ₹0/$0 (or could not be confirmed positive) — refusing to place any leg. Check your Delta wallet."}), 400
 
     # ---- parallel precheck (both legs at once) ----
     # Resolves product IDs (cache warm-up) and checks orderbook depth for
@@ -863,33 +984,19 @@ def place_spread():
             notify_trade_outcome(notify_kind, notify_msg, settings=settings)
         return jsonify({"ok": False, "leg1": buy_result, "leg2": sell_result, "unwind": unwind_result, "dry_run": dry_run, "error": msg})
 
-    # ---- post-trade reconciliation ----
+    # ---- post-trade reconciliation (async) ----
     # Confirms Delta's own position ledger agrees with what the fill
     # responses told us -- catches any silent mismatch (race condition,
-    # partial data, etc.) instead of just trusting the order responses blindly.
-    reconciliation_notes = []
+    # partial data, etc.). Runs in the background AFTER the response is
+    # already sent back -- the trade itself is done at this point, so there's
+    # no reason to make the user wait on this extra pair of Delta calls
+    # before seeing their result. A mismatch (rare) gets logged + alerted
+    # slightly after the fact instead of blocking the response by ~0.3-0.6s.
     if not dry_run:
-        buy_pos_after = get_position_size(buy_leg["symbol"])
-        sell_pos_after = get_position_size(sell_leg["symbol"])
-        buy_pos_before = (buy_precheck or {}).get("position_before")
-        sell_pos_before = (sell_precheck or {}).get("position_before")
-        if buy_pos_before is not None and buy_pos_after is not None:
-            expected = buy_pos_before + buy_result["filled_size"]
-            if abs(buy_pos_after - expected) > 0.01:
-                reconciliation_notes.append(f"{buy_leg['symbol']}: expected position {expected}, Delta shows {buy_pos_after}")
-        if sell_pos_before is not None and sell_pos_after is not None:
-            expected = sell_pos_before - sell_result["filled_size"]
-            if abs(sell_pos_after - expected) > 0.01:
-                reconciliation_notes.append(f"{sell_leg['symbol']}: expected position {expected}, Delta shows {sell_pos_after}")
-        if reconciliation_notes:
-            audit("reconciliation_mismatch", notes=reconciliation_notes)
-
-    reconciliation_warning = ("Reconciliation mismatch — " + " · ".join(reconciliation_notes)) if reconciliation_notes else None
+        threading.Thread(target=run_reconciliation, args=(buy_leg, sell_leg, buy_result, sell_result, buy_precheck, sell_precheck, settings), daemon=True).start()
 
     if sell_result["filled_size"] < sell_size:
         warning = f"Sell leg partially filled ({sell_result['filled_size']}/{sell_size}); ratio vs the buy leg is now mismatched — review positions manually."
-        if reconciliation_warning:
-            warning += " " + reconciliation_warning
         if not dry_run:
             record_outcome(True)  # order executed, just not at full size -- not a "failure" for circuit-breaker purposes
             notify_trade_outcome("success", f"⚠️ Spread executed with partial sell fill: {buy_leg['symbol']} x{buy_result['filled_size']} / {sell_leg['symbol']} x{sell_result['filled_size']}. {warning}", settings=settings)
@@ -898,7 +1005,7 @@ def place_spread():
     if not dry_run:
         record_outcome(True)
         notify_trade_outcome("success", f"✅ Spread executed: BUY {buy_leg['symbol']} x{buy_result['filled_size']} @ {buy_result['avg_price']} / SELL {sell_leg['symbol']} x{sell_result['filled_size']} @ {sell_result['avg_price']}", settings=settings)
-    return jsonify({"ok": True, "leg1": buy_result, "leg2": sell_result, "warning": reconciliation_warning, "dry_run": dry_run})
+    return jsonify({"ok": True, "leg1": buy_result, "leg2": sell_result, "warning": None, "dry_run": dry_run})
 
 
 # ==================== keep-alive (best-effort, use UptimeRobot as primary) ====================

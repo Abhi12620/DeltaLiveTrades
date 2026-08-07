@@ -307,6 +307,41 @@
   .toolbar-badge.kill{background:rgba(242,84,91,.18);color:var(--put);border:1px solid rgba(242,84,91,.4);}
   .toolbar-badge.dry{background:rgba(255,180,60,.18);color:#ffb43c;border:1px solid rgba(255,180,60,.4);}
 
+  /* ---- unified tabbed ops panel (Account / Order log / Trade Params) ---- */
+  .ops-modal{max-width:640px;width:100%;max-height:85vh;display:flex;flex-direction:column;padding:0;overflow:hidden;}
+  .ops-tabbar{display:flex;border-bottom:1px solid var(--border);padding:0 18px;flex-shrink:0;position:relative;background:var(--surface);}
+  .ops-tab{background:none;border:none;color:var(--muted);font-family:var(--sans);font-weight:700;font-size:12.5px;padding:14px 14px 12px;cursor:pointer;border-bottom:2px solid transparent;white-space:nowrap;}
+  .ops-tab:hover{color:var(--text);}
+  .ops-tab.active{color:var(--text);border-bottom-color:var(--accent);}
+  .ops-close{position:absolute;top:8px;right:12px;background:none;border:none;color:var(--muted);font-size:15px;cursor:pointer;padding:6px 9px;border-radius:6px;}
+  .ops-close:hover{color:var(--text);background:var(--surface3);}
+  .ops-body{overflow-y:auto;padding:16px 20px 20px;flex:1;}
+  .ops-panel{display:none;}
+  .ops-panel.active{display:block;}
+
+  /* prominent kill-switch / dry-run cards -- distinct from the smaller inline toggles */
+  .tp-toggle-card{display:flex;align-items:center;justify-content:space-between;gap:12px;border:1px solid var(--border);border-radius:10px;padding:12px 14px;margin-bottom:10px;background:var(--surface3);}
+  .tp-toggle-card .ttl{font-weight:800;font-size:13.5px;}
+  .tp-toggle-card .sub{font-size:11px;color:var(--muted);margin-top:3px;line-height:1.4;}
+  .tp-toggle-card.danger{border-color:rgba(242,84,91,.35);}
+  .tp-toggle-card.warn{border-color:rgba(255,180,60,.35);}
+  .tp-switch{display:inline-block;flex-shrink:0;cursor:pointer;}
+  .tp-switch input{display:none;}
+  .tp-switch .sw{display:block;width:42px;height:24px;border-radius:999px;background:var(--surface2);border:1px solid var(--border);position:relative;transition:background .15s,border-color .15s;}
+  .tp-switch .sw::after{content:'';position:absolute;top:2px;left:2px;width:18px;height:18px;border-radius:50%;background:var(--muted);transition:transform .15s,background .15s;}
+  .tp-switch input:checked + .sw{background:var(--accent);border-color:var(--accent);}
+  .tp-switch input:checked + .sw::after{transform:translateX(18px);background:#fff;}
+  .tp-toggle-card.danger .tp-switch input:checked + .sw{background:var(--put);border-color:var(--put);}
+  .tp-toggle-card.warn .tp-switch input:checked + .sw{background:#ffb43c;border-color:#ffb43c;}
+
+  /* fix: `.settings-modal label{display:block;...}` has higher specificity
+     than the plain `.trade-col-toggle`/`.tp-switch` class rules and was
+     silently overriding their flex layout + text styling, breaking the
+     toggle switches visually. These scoped overrides win the specificity
+     fight (2 classes > 1 class + 1 element) and restore the intended look. */
+  .settings-modal .trade-col-toggle{display:flex;align-items:center;gap:7px;font-size:inherit;color:inherit;font-weight:400;text-transform:none;letter-spacing:normal;margin:6px 0;}
+  .settings-modal .tp-switch{display:inline-block;font-size:inherit;color:inherit;font-weight:400;text-transform:none;letter-spacing:normal;margin:0;}
+
   /* ---- login gate ---- */
   #loginGate{position:fixed;inset:0;z-index:99999;background:var(--bg);display:flex;align-items:center;justify-content:center;padding:20px;}
   #loginGate.hidden{display:none;}
@@ -497,176 +532,6 @@
     .deck-toggle button{padding:9px 14px;font-size:12px;}
     .side-panel-body{flex-direction:column;}
   }
-
-  /* ==================================================================
-     FRONTEND REFRESH — toolbar buttons + settings panels (styling only)
-     Pure presentation overrides. No markup/JS/logic dependencies.
-     ================================================================== */
-
-  /* ---- toolbar: grouped toolstrip ---- */
-  #spreadGlobalBar{gap:8px;flex-wrap:wrap;align-items:center;}
-  .alert-settings-btn{
-    display:inline-flex;align-items:center;gap:6px;
-    border:1px solid var(--border);
-    background:linear-gradient(180deg,var(--surface2),var(--surface));
-    color:var(--text);font-family:var(--sans);font-weight:700;
-    font-size:12px;letter-spacing:-.1px;padding:7px 12px;border-radius:10px;
-    cursor:pointer;box-shadow:var(--shadow-sm);
-    transition:transform .12s ease,border-color .15s ease,box-shadow .15s ease,color .15s ease;
-  }
-  .alert-settings-btn:hover{
-    color:var(--text);border-color:var(--accent);
-    transform:translateY(-1px);
-    box-shadow:0 4px 14px -6px rgba(0,0,0,.55), inset 0 0 0 9999px var(--accent-dim);
-  }
-  .alert-settings-btn:active{transform:translateY(0);}
-  .alert-settings-btn:focus-visible{outline:2px solid var(--accent);outline-offset:2px;}
-  #liveTradeSettingsBtn:hover{border-color:var(--put);box-shadow:0 4px 14px -6px rgba(0,0,0,.55), inset 0 0 0 9999px var(--put-dim);}
-  #tradeParamsBtn:hover{border-color:var(--atm);box-shadow:0 4px 14px -6px rgba(0,0,0,.55), inset 0 0 0 9999px var(--atm-dim);}
-  .toolbar-badge{border-radius:999px;padding:4px 10px;letter-spacing:.03em;}
-
-  /* ---- overlay ---- */
-  .alert-popover-overlay{background:rgba(0,0,0,.62);backdrop-filter:blur(3px);}
-  .alert-popover-overlay.open .settings-modal,
-  .alert-popover-overlay.open .alert-popover{animation:modalPop .18s ease-out;}
-  @keyframes modalPop{from{opacity:0;transform:translateY(8px) scale(.985);}to{opacity:1;transform:none;}}
-
-  /* ---- panel shell: sticky title, sticky action bar, scrolling body ---- */
-  .settings-modal,.alert-popover{
-    border-radius:16px;padding:0 0 0;
-    box-shadow:0 24px 70px -20px rgba(0,0,0,.7),0 2px 6px rgba(0,0,0,.35);
-    max-height:86vh;overflow:auto;scrollbar-width:thin;
-    background:var(--surface);padding:0 20px 18px;
-  }
-  .settings-modal::-webkit-scrollbar,.log-raw::-webkit-scrollbar,#orderLogBody::-webkit-scrollbar{width:9px;height:9px;}
-  .settings-modal::-webkit-scrollbar-thumb,.log-raw::-webkit-scrollbar-thumb,#orderLogBody::-webkit-scrollbar-thumb{background:var(--surface3);border-radius:9px;}
-  .settings-modal > h4,.alert-popover > h4{
-    position:sticky;top:0;z-index:3;margin:0 -20px 14px;padding:15px 20px 13px;
-    background:var(--surface);border-bottom:1px solid var(--border);
-    font-family:var(--sans);font-size:14.5px;font-weight:800;letter-spacing:-.2px;
-    display:flex;align-items:center;gap:8px;
-  }
-  .settings-modal > h4::before,.alert-popover > h4::before{
-    content:'';width:3px;height:15px;border-radius:3px;background:var(--accent);flex-shrink:0;
-  }
-  .settings-modal > .btnrow,.alert-popover > .btnrow{
-    position:sticky;bottom:0;z-index:3;margin:16px -20px -18px;padding:12px 20px;
-    background:var(--surface);border-top:1px solid var(--border);
-    display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;
-  }
-
-  /* ---- typography inside panels ---- */
-  .settings-modal p.note{color:var(--muted);font-size:11.5px;line-height:1.55;margin:0 0 12px;}
-  .settings-modal label:not(.trade-col-toggle),.order-field-label{
-    font-size:10px;color:var(--muted);font-weight:800;text-transform:uppercase;
-    letter-spacing:.07em;margin:12px 0 5px;
-  }
-  .acct-section-title{
-    display:flex;align-items:center;gap:8px;font-size:10px;letter-spacing:.09em;
-    color:var(--muted);margin:18px 0 8px;
-  }
-  .acct-section-title::after{content:'';flex:1;height:1px;background:var(--border);}
-
-  /* ---- inputs ---- */
-  .settings-modal input:not([type=checkbox]),
-  .alert-popover input:not([type=checkbox]),
-  .alert-popover select,
-  .settings-modal select{
-    background:var(--surface2);border:1px solid var(--border);border-radius:9px;
-    padding:9px 11px;transition:border-color .15s,box-shadow .15s;
-  }
-  .settings-modal input:not([type=checkbox]):focus,
-  .alert-popover input:not([type=checkbox]):focus,
-  .alert-popover select:focus,.settings-modal select:focus{
-    border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-dim);
-  }
-  .settings-modal input::placeholder,.alert-popover input::placeholder{color:var(--muted2);}
-
-  /* ---- buttons in panels ---- */
-  .settings-modal button,.alert-popover button{
-    border-radius:9px;padding:9px 15px;font-size:12.5px;font-weight:700;
-    transition:transform .12s,filter .15s,border-color .15s,color .15s;
-  }
-  .settings-modal button:hover,.alert-popover button:hover{transform:translateY(-1px);filter:brightness(1.08);}
-  .settings-modal button:active,.alert-popover button:active{transform:translateY(0);}
-  .settings-modal .save-btn,.alert-popover .save-btn{
-    background:linear-gradient(180deg,var(--accent),var(--accent2));
-    border-color:var(--accent2);color:#04110f;font-weight:800;
-    box-shadow:0 6px 16px -8px var(--accent);
-  }
-  .settings-modal .test-btn{border-color:var(--border);color:var(--accent);background:var(--surface2);}
-  .settings-modal .test-btn:hover,.settings-modal button:not(.save-btn):hover{border-color:var(--accent);color:var(--text);}
-  .alert-popover .remove-btn{border-color:rgba(242,84,91,.4);}
-  .alert-popover .btnrow{flex-wrap:nowrap;}
-  .alert-popover .btnrow button{flex:1;}
-
-  /* ---- alert list rows ---- */
-  .alert-list-item{
-    border-radius:10px;background:var(--surface2);border-color:var(--border-soft);
-    padding:9px 11px;font-size:11.5px;transition:border-color .15s;
-  }
-  .alert-list-item:hover{border-color:var(--accent);}
-  .alert-list-item .rm{
-    border-radius:6px;background:rgba(242,84,91,.12);width:20px;height:20px;
-    display:inline-flex;align-items:center;justify-content:center;font-size:13px;
-  }
-
-  /* ---- account panel ---- */
-  #acctSummary,#acctBalances,#acctPositions,#acctRisk{margin-top:2px;}
-  .acct-summary-row{
-    padding:7px 11px;border-radius:9px;background:var(--surface2);
-    margin-bottom:5px;font-size:12px;align-items:center;
-  }
-  .acct-summary-row b{font-weight:800;}
-  .acct-table{
-    border-collapse:separate;border-spacing:0;font-size:11.5px;
-    background:var(--surface2);border:1px solid var(--border-soft);border-radius:10px;overflow:hidden;
-  }
-  .acct-table th{
-    background:var(--surface3);font-size:9.5px;text-transform:uppercase;letter-spacing:.06em;
-    padding:7px 9px;border-bottom:1px solid var(--border);
-  }
-  .acct-table td{padding:7px 9px;border-bottom:1px solid var(--border-soft);}
-  .acct-table tr:last-child td{border-bottom:none;}
-  .acct-table tbody tr:hover td{background:var(--surface3);}
-
-  /* column alignment: label column left, all numeric columns right — headers match cells */
-  .acct-table{width:100%;table-layout:auto;}
-  .acct-table th,.acct-table td{white-space:nowrap;text-align:right;vertical-align:middle;}
-  .acct-table th:first-child,.acct-table td:first-child{text-align:left;}
-  /* horizontal scroll instead of squashed/overflowing columns */
-  #acctBalances,#acctPositions,#acctRisk{overflow-x:auto;}
-  #acctBalances .acct-table,#acctPositions .acct-table,#acctRisk .acct-table{min-width:100%;width:max-content;}
-
-
-  /* ---- order log ---- */
-  .settings-modal label.trade-col-toggle{display:flex;align-items:center;gap:9px;font-size:12px;color:var(--text);font-weight:700;text-transform:none;letter-spacing:0;margin:10px 0;}
-  #orderLogBody:not(:empty){
-    border:1px solid var(--border-soft);border-radius:10px;background:var(--surface2);
-    max-height:min(48vh,420px);
-  }
-  .log-table th{
-    background:var(--surface3);font-size:9.5px;text-transform:uppercase;letter-spacing:.06em;padding:8px 10px;
-  }
-  .log-table td{padding:8px 10px;font-size:11px;border-bottom:1px solid var(--border-soft);}
-  .log-table tbody tr:hover td{background:var(--surface3);}
-  .log-badge{border-radius:999px;padding:3px 9px;}
-  .log-raw{background:var(--surface2);border-radius:10px;}
-
-  /* ---- trade params / order spec ---- */
-  .tp-banner{border-radius:10px;padding:10px 13px;font-size:12px;}
-  .order-spec{border-radius:11px;background:var(--surface2);padding:11px 13px;border-color:var(--border-soft);}
-  .order-spec-row{font-size:12px;padding:4px 0;}
-
-  @media (max-width:640px){
-    .settings-modal,.alert-popover{max-height:92vh;border-radius:14px;padding:0 14px 14px;}
-    .settings-modal > h4,.alert-popover > h4{margin:0 -14px 12px;}
-    .settings-modal > .btnrow,.alert-popover > .btnrow{margin:14px -14px -14px;}
-    .alert-settings-btn{flex:1 1 auto;justify-content:center;}
-    .settings-modal > .btnrow,.alert-popover > .btnrow{padding:11px 14px;}
-    .settings-modal > h4,.alert-popover > h4{padding:13px 14px 11px;}
-  }
-
 </style>
 </head>
 <body data-theme="dark">
@@ -1084,6 +949,8 @@
       <input type="number" id="orderSlippageInput" min="0.1" step="0.1" value="1.0">
     </div>
 
+    <div id="orderDepthPreview" class="order-spec" style="margin-top:8px;"></div>
+
     <p class="note" style="font-size:10.5px;margin-top:10px;line-height:1.4;">Plain market orders. Orderbook depth is checked for both legs before anything is placed. No auto-unwind — if the sell leg doesn't fully fill, you'll get a loud warning to act on manually.</p>
 
     <p class="note" id="orderQtyErr" style="color:var(--put);display:none;margin-top:8px;"></p>
@@ -1146,7 +1013,17 @@
   <div class="settings-modal" style="max-width:480px;">
     <h4>Trade parameters</h4>
     <div id="tpBanners"></div>
-    <p class="note">These apply instantly — no code edit, no redeploy, no cache-clearing needed. Server-side values sync live to your Render backend via "Sync to server"; the last section is local to this browser only.</p>
+
+    <div class="tp-toggle-card danger" id="tpKillSwitchCard">
+      <div><div class="ttl">🛑 Kill switch</div><div class="sub">Blocks ALL live orders immediately, no exceptions</div></div>
+      <label class="tp-switch"><input type="checkbox" id="tpKillSwitch"><span class="sw"></span></label>
+    </div>
+    <div class="tp-toggle-card warn" id="tpDryRunCard">
+      <div><div class="ttl">🧪 Dry-run mode</div><div class="sub">Simulates the full flow — depth checks + margin precheck run for real, but no real order is ever sent</div></div>
+      <label class="tp-switch"><input type="checkbox" id="tpDryRun"><span class="sw"></span></label>
+    </div>
+
+    <p class="note" style="margin-top:10px;">Everything below applies instantly — no code edit, no redeploy, no cache-clearing. Server-side values sync via "Sync to server"; the last section is local to this browser only.</p>
 
     <div class="acct-section-title">Order safety — synced to backend</div>
     <label>Fat-finger HARD BLOCK (max lots per leg)</label>
@@ -1169,6 +1046,22 @@
     <input type="number" id="tpStaleSeconds" min="0.5" step="0.5">
     <p class="note" style="margin:2px 0 8px;">If a depth-check response takes longer than this, it's treated as too slow/unreliable to trade on — that leg is refused rather than risking a trade on stale data.</p>
 
+    <div class="acct-section-title">Speed tuning — synced to backend</div>
+    <label>Fill-confirmation poll gap (ms)</label>
+    <input type="number" id="tpPollDelay" min="10" step="10">
+    <p class="note" style="margin:2px 0 8px;">How often to re-check an order's status while confirming a fill. Lower = faster confirmation, but more Delta API calls in quick succession.</p>
+
+    <label class="trade-col-toggle" style="margin:6px 0;">
+      <input type="checkbox" id="tpMarginPrecheckEnabled">
+      <span class="tct-track"><span class="tct-thumb"></span></span>
+      <span class="tct-label">💰 Margin precheck before every order</span>
+    </label>
+    <p class="note" style="margin:2px 0 8px;">ON by default. Checks wallet balance isn't ₹0/$0 before placing anything. Turning this OFF saves one Delta call per order — fine if you trade infrequently and margin is rarely the actual blocker.</p>
+
+    <label>Margin-balance cache duration (seconds)</label>
+    <input type="number" id="tpMarginCacheSeconds" min="0" step="0.5">
+    <p class="note" style="margin:2px 0 8px;">If you place orders in quick succession, the balance from the last check is reused for this long instead of re-fetching every time. 0 = always fetch fresh.</p>
+
     <div class="acct-section-title">If the sell leg fails — synced to backend</div>
     <label class="trade-col-toggle" style="margin:6px 0;">
       <input type="checkbox" id="tpUnwindEnabled">
@@ -1181,19 +1074,6 @@
     <label>Auto-kill-switch after this many consecutive failed trades</label>
     <input type="number" id="tpCircuitThreshold" min="1" step="1">
     <p class="note" style="margin:2px 0 8px;">Protects against a systemic problem (bad key, Delta outage) silently failing trade after trade unattended. Resets to 0 the moment a trade succeeds, or when you manually turn the kill switch back off.</p>
-
-    <div class="acct-section-title">Emergency controls — synced to backend</div>
-    <label class="trade-col-toggle" style="margin:6px 0;">
-      <input type="checkbox" id="tpKillSwitch">
-      <span class="tct-track"><span class="tct-thumb"></span></span>
-      <span class="tct-label">🛑 Kill switch — block ALL live orders</span>
-    </label>
-    <label class="trade-col-toggle" style="margin:6px 0;">
-      <input type="checkbox" id="tpDryRun">
-      <span class="tct-track"><span class="tct-thumb"></span></span>
-      <span class="tct-label">🧪 Dry-run mode — simulate only, no real orders</span>
-    </label>
-    <p class="note" style="margin:2px 0 8px;">Dry-run still runs the real depth checks and margin precheck, but never sends an actual order to Delta — response looks identical, tagged "dry_run". Use this to test the whole flow (including fat-finger warnings) risk-free.</p>
 
     <div class="acct-section-title">Telegram notifications — synced to backend</div>
     <p class="note" id="tpTelegramStatus" style="margin:2px 0 8px;"></p>
@@ -2583,14 +2463,71 @@ function openOrderQtyModal(params){
   document.getElementById('orderQtyInput').focus();
   setBackendStatus('checking', 'Checking backend…');
   ensureBackendAwake(setBackendStatus);
+  document.getElementById('orderDepthPreview').innerHTML = '';
+  startDepthPreviewLoop();
 }
 document.getElementById('orderSlippageInput').addEventListener('change', (e)=>{
   localStorage.setItem('doc_depth_band_pct', e.target.value);
+  refreshDepthPreview();
 });
+
+// ---- live depth preview: shows real orderbook depth for both legs while
+// the order modal is open, refreshed periodically, so you can see BEFORE
+// clicking "Place order" whether your requested size looks realistic. Pure
+// read-only/informational -- doesn't change how orders are actually placed.
+let depthPreviewTimer = null;
+function legSizesFromCtx(){
+  const legs = currentOrderCtx;
+  const qty = parseInt(document.getElementById('orderQtyInput').value, 10);
+  if(!legs || !qty || qty <= 0) return null;
+  const ratioSize = Math.max(1, Math.round(qty * legs.ratio));
+  return {
+    buy: { symbol: legs.buySingle ? legs.singleRow.symbol : legs.ratioRow.symbol, side: 'buy', size: legs.buySingle ? qty : ratioSize },
+    sell: { symbol: legs.buySingle ? legs.ratioRow.symbol : legs.singleRow.symbol, side: 'sell', size: legs.buySingle ? ratioSize : qty },
+  };
+}
+async function refreshDepthPreview(){
+  const el = document.getElementById('orderDepthPreview');
+  const sizes = legSizesFromCtx();
+  if(!sizes || !LIVE.backendUrl || !LIVE.appSecret){ el.innerHTML = ''; return; }
+  const band = (parseFloat(document.getElementById('orderSlippageInput').value) || 1.0) / 100;
+  try{
+    const res = await fetch(LIVE.backendUrl.replace(/\/$/, '') + '/api/depth-preview', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-App-Secret': LIVE.appSecret },
+      body: JSON.stringify({ legs: [sizes.buy, sizes.sell], depth_band_pct: band }),
+    });
+    const data = await res.json();
+    if(!data.ok || !data.legs){ el.innerHTML = '<p class="note">Depth preview unavailable.</p>'; return; }
+    el.innerHTML = data.legs.map(l=>{
+      if(l.error) return `<div class="order-spec-row"><span>${l.symbol||'?'}</span><span class="val" style="color:var(--put);">error</span></div>`;
+      const icon = l.sufficient ? '🟢' : '🟠';
+      const label = l.side==='buy' ? 'BUY (asks)' : 'SELL (bids)';
+      return `<div class="order-spec-row"><span>${icon} ${label} — need ${l.requested}</span><span class="val">${l.available.toFixed(0)} avail @ ${l.best_price ?? '—'}</span></div>`;
+    }).join('');
+  } catch(e){
+    el.innerHTML = '<p class="note">Depth preview: network error.</p>';
+  }
+}
+function startDepthPreviewLoop(){
+  stopDepthPreviewLoop();
+  refreshDepthPreview();
+  depthPreviewTimer = setInterval(refreshDepthPreview, 2000);
+}
+function stopDepthPreviewLoop(){
+  if(depthPreviewTimer){ clearInterval(depthPreviewTimer); depthPreviewTimer = null; }
+}
+let depthPreviewDebounce = null;
+document.getElementById('orderQtyInput').addEventListener('input', ()=>{
+  clearTimeout(depthPreviewDebounce);
+  depthPreviewDebounce = setTimeout(refreshDepthPreview, 400);
+});
+
 function closeOrderQtyModal(){
   document.getElementById('orderQtyOverlay').classList.remove('open');
   currentOrderCtx = null;
   wakeCheckActive = false;
+  stopDepthPreviewLoop();
 }
 document.getElementById('orderQtyCancelBtn').addEventListener('click', closeOrderQtyModal);
 document.getElementById('orderQtyOverlay').addEventListener('click', (e)=>{
@@ -2837,16 +2774,32 @@ async function loadAccountInfo(){
     statusEl.textContent = 'Network/backend error: ' + e.message;
   }
 }
-document.getElementById('accountInfoBtn').addEventListener('click', ()=>{
-  document.getElementById('accountInfoOverlay').classList.add('open');
-  loadAccountInfo();
-});
 document.getElementById('acctRefreshBtn').addEventListener('click', loadAccountInfo);
-document.getElementById('acctCloseBtn').addEventListener('click', ()=>{
-  document.getElementById('accountInfoOverlay').classList.remove('open');
+
+// ---- unified tabbed ops panel: Account / Order log / Trade Params ----
+function openOpsPanel(tabName){
+  document.getElementById('opsPanelOverlay').classList.add('open');
+  switchOpsTab(tabName);
+}
+function switchOpsTab(tabName){
+  document.querySelectorAll('.ops-tab').forEach(t=>t.classList.toggle('active', t.dataset.tab === tabName));
+  document.querySelectorAll('.ops-panel').forEach(p=>p.classList.toggle('active', p.dataset.panel === tabName));
+  if(tabName === 'account') loadAccountInfo();
+  else if(tabName === 'log') loadOrderLog();
+  else if(tabName === 'params') openTradeParams();
+}
+document.querySelectorAll('.ops-tab').forEach(tab=>{
+  tab.addEventListener('click', ()=>switchOpsTab(tab.dataset.tab));
 });
-document.getElementById('accountInfoOverlay').addEventListener('click', (e)=>{
-  if(e.target.id === 'accountInfoOverlay') document.getElementById('accountInfoOverlay').classList.remove('open');
+document.getElementById('accountInfoBtn').addEventListener('click', ()=>openOpsPanel('account'));
+document.getElementById('orderLogBtn').addEventListener('click', ()=>openOpsPanel('log'));
+document.getElementById('tradeParamsBtn').addEventListener('click', ()=>openOpsPanel('params'));
+document.getElementById('opsCloseBtn').addEventListener('click', ()=>{
+  document.getElementById('opsPanelOverlay').classList.remove('open');
+  refreshToolbarStatus();
+});
+document.getElementById('opsPanelOverlay').addEventListener('click', (e)=>{
+  if(e.target.id === 'opsPanelOverlay'){ document.getElementById('opsPanelOverlay').classList.remove('open'); refreshToolbarStatus(); }
 });
 
 // ---- order audit log panel ----
@@ -2915,17 +2868,7 @@ async function loadOrderLog(){
   }
 }
 document.getElementById('orderLogRawToggle').addEventListener('change', loadOrderLog);
-document.getElementById('orderLogBtn').addEventListener('click', ()=>{
-  document.getElementById('orderLogOverlay').classList.add('open');
-  loadOrderLog();
-});
 document.getElementById('orderLogRefreshBtn').addEventListener('click', loadOrderLog);
-document.getElementById('orderLogCloseBtn').addEventListener('click', ()=>{
-  document.getElementById('orderLogOverlay').classList.remove('open');
-});
-document.getElementById('orderLogOverlay').addEventListener('click', (e)=>{
-  if(e.target.id === 'orderLogOverlay') document.getElementById('orderLogOverlay').classList.remove('open');
-});
 
 // ---- trade parameters panel: fat-finger, depth-band, etc. -- all apply
 // instantly, no code edit / redeploy / cache-clear needed ----
@@ -2998,7 +2941,6 @@ async function openTradeParams(){
   document.getElementById('tpStatus').textContent = '';
   document.getElementById('tpBanners').innerHTML = '';
   renderAccountSwitcher(null, 'A');
-  document.getElementById('tradeParamsOverlay').classList.add('open');
   if(LIVE.backendUrl && LIVE.appSecret){
     try{
       const res = await fetch(LIVE.backendUrl.replace(/\/$/, '') + '/api/settings', {
@@ -3012,6 +2954,9 @@ async function openTradeParams(){
         document.getElementById('tpInterLegDelay').value = s.inter_leg_delay_ms ?? 0;
         document.getElementById('tpSellRetries').value = s.sell_leg_retries ?? 2;
         document.getElementById('tpStaleSeconds').value = s.stale_data_max_seconds ?? 3.0;
+        document.getElementById('tpPollDelay').value = s.fill_poll_delay_ms ?? 50;
+        document.getElementById('tpMarginPrecheckEnabled').checked = s.margin_precheck_enabled !== false;
+        document.getElementById('tpMarginCacheSeconds').value = s.margin_precheck_cache_seconds ?? 2.5;
         document.getElementById('tpUnwindEnabled').checked = !!s.unwind_enabled;
         document.getElementById('tpCircuitThreshold').value = s.circuit_breaker_threshold ?? 3;
         document.getElementById('tpDryRun').checked = !!s.dry_run;
@@ -3038,14 +2983,6 @@ async function openTradeParams(){
     document.getElementById('tpStatus').textContent = 'Backend not configured yet ("🔴 Live orders") — showing local values only; server-side settings can\'t be synced until it is.';
   }
 }
-document.getElementById('tradeParamsBtn').addEventListener('click', openTradeParams);
-document.getElementById('tpCloseBtn').addEventListener('click', ()=>{
-  document.getElementById('tradeParamsOverlay').classList.remove('open');
-  refreshToolbarStatus();
-});
-document.getElementById('tradeParamsOverlay').addEventListener('click', (e)=>{
-  if(e.target.id === 'tradeParamsOverlay'){ document.getElementById('tradeParamsOverlay').classList.remove('open'); refreshToolbarStatus(); }
-});
 document.getElementById('tpSaveBtn').addEventListener('click', ()=>{
   const warn = parseInt(document.getElementById('tpWarnLotSize').value, 10);
   const band = parseFloat(document.getElementById('tpDepthBandPct').value);
@@ -3067,6 +3004,9 @@ document.getElementById('tpSyncBtn').addEventListener('click', async ()=>{
   const interLegDelay = parseInt(document.getElementById('tpInterLegDelay').value, 10) || 0;
   const sellRetries = parseInt(document.getElementById('tpSellRetries').value, 10);
   const staleSeconds = parseFloat(document.getElementById('tpStaleSeconds').value);
+  const pollDelay = parseInt(document.getElementById('tpPollDelay').value, 10);
+  const marginPrecheckEnabled = document.getElementById('tpMarginPrecheckEnabled').checked;
+  const marginCacheSeconds = parseFloat(document.getElementById('tpMarginCacheSeconds').value);
   const unwindEnabled = document.getElementById('tpUnwindEnabled').checked;
   const circuitThreshold = parseInt(document.getElementById('tpCircuitThreshold').value, 10);
   const dryRun = document.getElementById('tpDryRun').checked;
@@ -3076,7 +3016,8 @@ document.getElementById('tpSyncBtn').addEventListener('click', async ()=>{
   const notifyNaked = document.getElementById('tpNotifyNaked').checked;
   const notifyCircuit = document.getElementById('tpNotifyCircuit').checked;
   if(!maxLot || maxLot <= 0 || !band || band <= 0 || sellRetries === '' || sellRetries < 0 || isNaN(sellRetries)
-     || !staleSeconds || staleSeconds <= 0 || !circuitThreshold || circuitThreshold <= 0){
+     || !staleSeconds || staleSeconds <= 0 || !circuitThreshold || circuitThreshold <= 0
+     || pollDelay === '' || pollDelay < 0 || isNaN(pollDelay) || marginCacheSeconds === '' || marginCacheSeconds < 0 || isNaN(marginCacheSeconds)){
     document.getElementById('tpStatus').textContent = 'Enter valid positive numbers.';
     return;
   }
@@ -3090,6 +3031,7 @@ document.getElementById('tpSyncBtn').addEventListener('click', async ()=>{
       body: JSON.stringify({
         max_lot_size: maxLot, depth_band_pct: band, inter_leg_delay_ms: interLegDelay,
         sell_leg_retries: sellRetries, stale_data_max_seconds: staleSeconds,
+        fill_poll_delay_ms: pollDelay, margin_precheck_enabled: marginPrecheckEnabled, margin_precheck_cache_seconds: marginCacheSeconds,
         unwind_enabled: unwindEnabled, circuit_breaker_threshold: circuitThreshold,
         dry_run: dryRun, kill_switch: killSwitch,
         notify_on_success: notifySuccess, notify_on_failure: notifyFailure,
