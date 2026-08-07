@@ -2776,30 +2776,40 @@ async function loadAccountInfo(){
 }
 document.getElementById('acctRefreshBtn').addEventListener('click', loadAccountInfo);
 
-// ---- unified tabbed ops panel: Account / Order log / Trade Params ----
-function openOpsPanel(tabName){
-  document.getElementById('opsPanelOverlay').classList.add('open');
-  switchOpsTab(tabName);
-}
-function switchOpsTab(tabName){
-  document.querySelectorAll('.ops-tab').forEach(t=>t.classList.toggle('active', t.dataset.tab === tabName));
-  document.querySelectorAll('.ops-panel').forEach(p=>p.classList.toggle('active', p.dataset.panel === tabName));
-  if(tabName === 'account') loadAccountInfo();
-  else if(tabName === 'log') loadOrderLog();
-  else if(tabName === 'params') openTradeParams();
-}
-document.querySelectorAll('.ops-tab').forEach(tab=>{
-  tab.addEventListener('click', ()=>switchOpsTab(tab.dataset.tab));
+document.getElementById('accountInfoBtn').addEventListener('click', ()=>{
+  document.getElementById('accountInfoOverlay').classList.add('open');
+  loadAccountInfo();
 });
-document.getElementById('accountInfoBtn').addEventListener('click', ()=>openOpsPanel('account'));
-document.getElementById('orderLogBtn').addEventListener('click', ()=>openOpsPanel('log'));
-document.getElementById('tradeParamsBtn').addEventListener('click', ()=>openOpsPanel('params'));
-document.getElementById('opsCloseBtn').addEventListener('click', ()=>{
-  document.getElementById('opsPanelOverlay').classList.remove('open');
+document.getElementById('acctCloseBtn').addEventListener('click', ()=>{
+  document.getElementById('accountInfoOverlay').classList.remove('open');
   refreshToolbarStatus();
 });
-document.getElementById('opsPanelOverlay').addEventListener('click', (e)=>{
-  if(e.target.id === 'opsPanelOverlay'){ document.getElementById('opsPanelOverlay').classList.remove('open'); refreshToolbarStatus(); }
+document.getElementById('accountInfoOverlay').addEventListener('click', (e)=>{
+  if(e.target.id === 'accountInfoOverlay'){ document.getElementById('accountInfoOverlay').classList.remove('open'); refreshToolbarStatus(); }
+});
+
+document.getElementById('orderLogBtn').addEventListener('click', ()=>{
+  document.getElementById('orderLogOverlay').classList.add('open');
+  loadOrderLog();
+});
+document.getElementById('orderLogCloseBtn').addEventListener('click', ()=>{
+  document.getElementById('orderLogOverlay').classList.remove('open');
+  refreshToolbarStatus();
+});
+document.getElementById('orderLogOverlay').addEventListener('click', (e)=>{
+  if(e.target.id === 'orderLogOverlay'){ document.getElementById('orderLogOverlay').classList.remove('open'); refreshToolbarStatus(); }
+});
+
+document.getElementById('tradeParamsBtn').addEventListener('click', ()=>{
+  document.getElementById('tradeParamsOverlay').classList.add('open');
+  openTradeParams();
+});
+document.getElementById('tpCloseBtn').addEventListener('click', ()=>{
+  document.getElementById('tradeParamsOverlay').classList.remove('open');
+  refreshToolbarStatus();
+});
+document.getElementById('tradeParamsOverlay').addEventListener('click', (e)=>{
+  if(e.target.id === 'tradeParamsOverlay'){ document.getElementById('tradeParamsOverlay').classList.remove('open'); refreshToolbarStatus(); }
 });
 
 // ---- order audit log panel ----
