@@ -61,6 +61,7 @@ _DEFAULT_SETTINGS = {
     "depth_band_pct": float(os.environ.get("DEPTH_BAND_PCT", "1.0")),  # stored as a PERCENT (e.g. 1.0 = 1%)
     "inter_leg_delay_ms": int(os.environ.get("INTER_LEG_DELAY_MS", "0")),  # deliberate pause AFTER the buy leg confirms, BEFORE the sell leg fires (0 = fire as soon as ready)
     "fill_poll_delay_ms": 50,     # gap between order-status polls while waiting for a fill to confirm
+    "skip_depth_check": False,  # ON = fire market orders immediately, no L2 depth precheck (faster; you already saw depth on the dashboard)
     "margin_precheck_enabled": True,   # OFF skips the wallet-balance gate entirely (saves a Delta call) -- fine if you trade infrequently and margin is rarely an issue
     "margin_precheck_cache_seconds": 2.5,  # how long a fetched balance is trusted before refetching
     "active_account": "A",       # which Delta API key/secret pair is currently in use ("A" or "B")
@@ -288,45 +289,50 @@ def round_to_tick(price, tick_size):
 
 
 # ==================== depth-checked market order placement ====================
-def place_market_leg(symbol, side, size, band_pct=None, dry_run=False):
-    """1) Checks L2 orderbook depth near the best price BEFORE placing anything
-          -- if the book can't realistically absorb `size`, the order is never
-          sent at all.
-       2) If depth is sufficient, places a plain MARKET order (no limit price) --
-          unless dry_run is True, in which case everything up to and including
-          the depth check is real, but no order is actually sent to Delta; a
-          simulated fill is returned instead (using the best available price).
-       3) Polls the order status afterwards so the returned fill size/price are
-          the REAL executed values, not an assumption (skipped in dry_run)."""
+def place_market_leg(symbol, side, size, band_pct=None, dry_run=False, skip_depth_check=None):
+    """1) Optionally checks L2 orderbook depth near the best price BEFORE placing
+          (skipped when skip_depth_check is True — faster path for traders who
+          already verified depth on the dashboard).
+       2) Places a plain MARKET order (no limit price) — unless dry_run.
+       3) Polls order status for real fill size/price (skipped in dry_run)."""
+    settings = load_settings()
     if band_pct is None:
-        band_pct = load_settings()["depth_band_pct"] / 100.0
+        band_pct = settings["depth_band_pct"] / 100.0
+    if skip_depth_check is None:
+        skip_depth_check = bool(settings.get("skip_depth_check", False))
     try:
         product = get_product(symbol)
     except Exception as e:
         return {"symbol": symbol, "ok": False, "filled_size": 0, "error": f"product lookup failed: {e}"}
 
-    try:
-        depth = check_depth(symbol, side, size, band_pct)
-    except Exception as e:
-        return {"symbol": symbol, "ok": False, "filled_size": 0, "error": f"orderbook lookup failed: {e}"}
+    depth = {"available": None, "best_price": None}
+    if not skip_depth_check:
+        try:
+            depth = check_depth(symbol, side, size, band_pct)
+        except Exception as e:
+            return {"symbol": symbol, "ok": False, "filled_size": 0, "error": f"orderbook lookup failed: {e}"}
 
-    if depth["available"] < size:
-        return {
-            "symbol": symbol, "ok": False, "filled_size": 0,
-            "error": (
-                f"Insufficient orderbook depth: only {depth['available']:.0f} lots available "
-                f"within {band_pct*100:.1f}% of best price ({depth['best_price']}), "
-                f"but {size} lots requested. Order NOT placed."
-            ),
-            "depth_available": depth["available"], "depth_checked_pct": band_pct * 100,
-        }
+        if depth["available"] < size:
+            return {
+                "symbol": symbol, "ok": False, "filled_size": 0,
+                "error": (
+                    f"Insufficient orderbook depth: only {depth['available']:.0f} lots available "
+                    f"within {band_pct*100:.1f}% of best price ({depth['best_price']}), "
+                    f"but {size} lots requested. Order NOT placed."
+                ),
+                "depth_available": depth["available"], "depth_checked_pct": band_pct * 100,
+            }
+    else:
+        audit("depth_check_skipped", symbol=symbol, side=side, size=size)
 
     if dry_run:
+        # without depth we have no best_price — use None / 0 placeholder
         leg_result = {
             "symbol": symbol, "ok": True, "order_id": "DRY_RUN", "dry_run": True,
             "requested_size": int(size), "filled_size": int(size), "unfilled_size": 0,
-            "avg_price": depth["best_price"], "state": "simulated",
-            "depth_available_precheck": depth["available"],
+            "avg_price": depth.get("best_price"), "state": "simulated",
+            "depth_available_precheck": depth.get("available"),
+            "skip_depth_check": skip_depth_check,
         }
         audit("dry_run_order", **leg_result)
         return leg_result
@@ -337,7 +343,8 @@ def place_market_leg(symbol, side, size, band_pct=None, dry_run=False):
         "side": side,
         "order_type": "market_order",
     }
-    audit("order_attempt", symbol=symbol, side=side, size=size, depth_available=depth["available"])
+    audit("order_attempt", symbol=symbol, side=side, size=size,
+          depth_available=depth.get("available"), skip_depth_check=skip_depth_check)
     status, data = _delta_post("/v2/orders", body)
     if not data.get("success"):
         audit("order_reject", symbol=symbol, side=side, response=data)
@@ -565,6 +572,8 @@ def settings_endpoint():
             current["fill_poll_delay_ms"] = v
         except (ValueError, TypeError):
             return jsonify({"ok": False, "error": "fill_poll_delay_ms must be a non-negative integer"}), 400
+    if "skip_depth_check" in data:
+        current["skip_depth_check"] = bool(data["skip_depth_check"])
     if "margin_precheck_enabled" in data:
         current["margin_precheck_enabled"] = bool(data["margin_precheck_enabled"])
     if "margin_precheck_cache_seconds" in data:
@@ -896,35 +905,49 @@ def place_spread():
                 notify_trade_outcome("failure", "❌ Order blocked: available balance is ₹0/$0 — nothing was placed.", settings=settings)
             return jsonify({"ok": False, "error": "Available balance is ₹0/$0 (or could not be confirmed positive) — refusing to place any leg. Check your Delta wallet."}), 400
 
-    # ---- parallel precheck (both legs at once) ----
-    # Resolves product IDs (cache warm-up) and checks orderbook depth for
-    # BOTH legs simultaneously, using each leg's requested/nominal size.
-    # If either side clearly can't be filled, we abort here -- before firing
-    # even the buy leg -- instead of discovering the sell side is doomed
-    # only after already taking the buy position.
-    precheck_results = [None, None]
+    skip_depth = bool(settings.get("skip_depth_check", False))
+    # request body can also force it for this one order
+    if "skip_depth_check" in data:
+        skip_depth = bool(data["skip_depth_check"])
 
-    def run_precheck(i, leg):
-        precheck_results[i] = precheck_leg(leg["symbol"], leg["side"], leg["size"], depth_band_pct)
+    buy_precheck, sell_precheck = None, None
+    if not skip_depth:
+        # ---- parallel precheck (both legs at once) ----
+        precheck_results = [None, None]
 
-    t1 = threading.Thread(target=run_precheck, args=(0, buy_leg))
-    t2 = threading.Thread(target=run_precheck, args=(1, sell_leg))
-    t1.start(); t2.start()
-    t1.join(timeout=15); t2.join(timeout=15)
-    buy_precheck, sell_precheck = precheck_results[0], precheck_results[1]
+        def run_precheck(i, leg):
+            precheck_results[i] = precheck_leg(leg["symbol"], leg["side"], leg["size"], depth_band_pct)
 
-    if not (buy_precheck and buy_precheck["ok"]) or not (sell_precheck and sell_precheck["ok"]):
-        audit("precheck_fail", buy_precheck=buy_precheck, sell_precheck=sell_precheck)
-        problems = []
-        if not (buy_precheck and buy_precheck["ok"]):
-            problems.append(f"BUY {buy_leg['symbol']}: only {buy_precheck['available']:.0f} lots depth available (need {buy_leg['size']})" if buy_precheck else f"BUY precheck failed ({buy_precheck.get('error') if buy_precheck else 'unknown'})")
-        if not (sell_precheck and sell_precheck["ok"]):
-            problems.append(f"SELL {sell_leg['symbol']}: only {sell_precheck['available']:.0f} lots depth available (need {sell_leg['size']})" if sell_precheck else f"SELL precheck failed ({sell_precheck.get('error') if sell_precheck else 'unknown'})")
-        msg = "Insufficient orderbook depth (or stale data) on at least one leg — nothing was placed. " + " · ".join(problems)
-        if not dry_run:
-            record_outcome(False)
-            notify_trade_outcome("failure", f"❌ Order precheck failed: {msg}", settings=settings)
-        return jsonify({"ok": False, "leg1": None, "leg2": None, "dry_run": dry_run, "error": msg})
+        t1 = threading.Thread(target=run_precheck, args=(0, buy_leg))
+        t2 = threading.Thread(target=run_precheck, args=(1, sell_leg))
+        t1.start(); t2.start()
+        t1.join(timeout=15); t2.join(timeout=15)
+        buy_precheck, sell_precheck = precheck_results[0], precheck_results[1]
+
+        if not (buy_precheck and buy_precheck["ok"]) or not (sell_precheck and sell_precheck["ok"]):
+            audit("precheck_fail", buy_precheck=buy_precheck, sell_precheck=sell_precheck)
+            problems = []
+            if not (buy_precheck and buy_precheck["ok"]):
+                problems.append(f"BUY {buy_leg['symbol']}: only {buy_precheck['available']:.0f} lots depth available (need {buy_leg['size']})" if buy_precheck else f"BUY precheck failed ({buy_precheck.get('error') if buy_precheck else 'unknown'})")
+            if not (sell_precheck and sell_precheck["ok"]):
+                problems.append(f"SELL {sell_leg['symbol']}: only {sell_precheck['available']:.0f} lots depth available (need {sell_leg['size']})" if sell_precheck else f"SELL precheck failed ({sell_precheck.get('error') if sell_precheck else 'unknown'})")
+            msg = "Insufficient orderbook depth (or stale data) on at least one leg — nothing was placed. " + " · ".join(problems)
+            if not dry_run:
+                record_outcome(False)
+                notify_trade_outcome("failure", f"❌ Order precheck failed: {msg}", settings=settings)
+            return jsonify({"ok": False, "leg1": None, "leg2": None, "dry_run": dry_run, "error": msg})
+    else:
+        audit("precheck_skipped", reason="skip_depth_check")
+        # still warm product cache in parallel so placement is fast
+        def _warm(sym):
+            try:
+                get_product(sym)
+            except Exception:
+                pass
+        tw1 = threading.Thread(target=_warm, args=(buy_leg["symbol"],))
+        tw2 = threading.Thread(target=_warm, args=(sell_leg["symbol"],))
+        tw1.start(); tw2.start()
+        tw1.join(timeout=8); tw2.join(timeout=8)
 
     # ---- BOTH legs fire SIMULTANEOUSLY (market orders in parallel threads) ----
     # User request: fire both legs at once rather than buy-then-sell sequential.
@@ -937,10 +960,10 @@ def place_spread():
     sell_result_box = [None]
 
     def _fire_buy():
-        buy_result_box[0] = place_market_leg(buy_leg["symbol"], "buy", buy_leg["size"], depth_band_pct, dry_run=dry_run)
+        buy_result_box[0] = place_market_leg(buy_leg["symbol"], "buy", buy_leg["size"], depth_band_pct, dry_run=dry_run, skip_depth_check=skip_depth)
 
     def _fire_sell():
-        sell_result_box[0] = place_market_leg(sell_leg["symbol"], "sell", sell_size, depth_band_pct, dry_run=dry_run)
+        sell_result_box[0] = place_market_leg(sell_leg["symbol"], "sell", sell_size, depth_band_pct, dry_run=dry_run, skip_depth_check=skip_depth)
 
     tb = threading.Thread(target=_fire_buy)
     ts = threading.Thread(target=_fire_sell)
@@ -952,7 +975,7 @@ def place_spread():
     # optional sell retries if first simultaneous attempt got nothing
     if (not sell_result.get("ok") or sell_result.get("filled_size", 0) == 0) and buy_result.get("ok"):
         for attempt in range(settings.get("sell_leg_retries", 2)):
-            sell_result = place_market_leg(sell_leg["symbol"], "sell", sell_size, depth_band_pct, dry_run=dry_run)
+            sell_result = place_market_leg(sell_leg["symbol"], "sell", sell_size, depth_band_pct, dry_run=dry_run, skip_depth_check=skip_depth)
             if sell_result.get("ok") and sell_result.get("filled_size", 0) > 0:
                 break
 

@@ -1060,12 +1060,13 @@
 
     <label class="order-field-label">Lots (base leg)</label>
     <div class="row">
-      <input type="number" id="orderQtyInput" placeholder="e.g. 100" min="1" step="1">
+      <input type="text" id="orderQtyInput" inputmode="numeric" placeholder="e.g. 100" autocomplete="off" spellcheck="false">
     </div>
     <label class="order-field-label">Depth-check band % <span style="font-weight:400;text-transform:none;color:var(--muted);">(stays fixed until you change it)</span></label>
     <div class="row">
-      <input type="number" id="orderSlippageInput" min="0.1" step="0.1" value="1.0">
+      <input type="text" id="orderSlippageInput" inputmode="decimal" placeholder="1.0" value="1.0" autocomplete="off" spellcheck="false">
     </div>
+    <p class="note" style="font-size:10.5px;margin:6px 0 0;color:var(--muted2);">Esc = close · + = BUY · − = SELL (switches side, keeps lot size)</p>
 
     <div id="orderDepthPreview" class="order-spec" style="margin-top:8px;"></div>
 
@@ -1154,6 +1155,10 @@
     <div class="tp-toggle-card warn" id="tpDryRunCard">
       <div><div class="ttl">🧪 Dry-run mode</div><div class="sub">Simulates the full flow — depth checks + margin precheck run for real, but no real order is ever sent</div></div>
       <label class="tp-switch"><input type="checkbox" id="tpDryRun"><span class="sw"></span></label>
+    </div>
+    <div class="tp-toggle-card" id="tpSkipDepthCard">
+      <div><div class="ttl">⚡ Fast execution (skip depth check)</div><div class="sub">Enter → seedha market orders, no L2 precheck. Use when you already confirmed depth on the ladder. OFF = safer (current behaviour).</div></div>
+      <label class="tp-switch"><input type="checkbox" id="tpSkipDepthCheck"><span class="sw"></span></label>
     </div>
 
     <p class="note" style="margin-top:10px;">Everything below applies instantly — no code edit, no redeploy, no cache-clearing. Server-side values sync via "Sync to server"; the last section is local to this browser only.</p>
@@ -2562,8 +2567,32 @@ function openOrderFromSelected(dir){
   });
 }
 
-// keyboard: ↑↓ select row, + buy modal, - sell modal (when on spread view, not in an input)
+// keyboard: Esc closes order modal; +/− open or switch BUY/SELL; ↑↓ select row
 document.addEventListener('keydown', (e)=>{
+  const orderOpen = document.getElementById('orderQtyOverlay')?.classList.contains('open');
+
+  // ---- order modal open: Esc / + / − take priority ----
+  if(orderOpen){
+    if(e.key === 'Escape'){
+      e.preventDefault();
+      closeOrderQtyModal();
+      return;
+    }
+    // + / − switch side even while typing in the lot field
+    if(e.key === '+' || e.key === '='){
+      e.preventDefault();
+      switchOrderDir('buy');
+      return;
+    }
+    if(e.key === '-' || e.key === '_'){
+      e.preventDefault();
+      switchOrderDir('sell');
+      return;
+    }
+    // all other keys (digits etc.) go to the focused input normally
+    return;
+  }
+
   if(state.view !== 'spread') return;
   const tag = (e.target && e.target.tagName || '').toLowerCase();
   if(tag === 'input' || tag === 'select' || tag === 'textarea' || e.target.isContentEditable) return;
@@ -2906,7 +2935,15 @@ if(LIVE.backendUrl && LIVE.appSecret){
   setTimeout(()=>{ if(typeof refreshToolbarStatus === 'function') refreshToolbarStatus(); }, 500);
 }
 
+let currentOrderParams = null; // last open modal params (for +/- side switch)
+
 function openOrderQtyModal(params){
+  const overlay = document.getElementById('orderQtyOverlay');
+  const wasOpen = overlay.classList.contains('open');
+  const prevQty = wasOpen ? document.getElementById('orderQtyInput').value : '';
+  const prevBand = wasOpen ? document.getElementById('orderSlippageInput').value : '';
+
+  currentOrderParams = { ...params };
   const legs = resolveSpreadLegs(params);
   const errEl = document.getElementById('orderQtyErr');
   errEl.style.display = 'none';
@@ -2917,7 +2954,6 @@ function openOrderQtyModal(params){
   currentOrderCtx = legs ? { ...legs, dirParam: params.dir } : null;
   const typeLbl = params.side.toUpperCase();
   const dirLbl = params.dir==='buy' ? 'BUY' : 'SELL';
-  const oppLbl = params.dir==='buy' ? 'SELL' : 'BUY';
   document.getElementById('orderQtyTitle').textContent = `${dirLbl} spread: ${fmtStrike(params.s1)}/${params.s2!==null && !isNaN(params.s2) ? fmtStrike(params.s2) : '—'} (${typeLbl})`;
   const specEl = document.getElementById('orderQtySpec');
   if(legs){
@@ -2933,7 +2969,6 @@ function openOrderQtyModal(params){
   } else {
     specEl.innerHTML = '';
   }
-  const overlay = document.getElementById('orderQtyOverlay');
   overlay.classList.remove('dir-buy','dir-sell');
   overlay.classList.add(params.dir==='buy' ? 'dir-buy' : 'dir-sell');
   const confirmBtn = document.getElementById('orderQtyConfirmBtn');
@@ -2942,15 +2977,26 @@ function openOrderQtyModal(params){
   confirmBtn.textContent = dirLbl;
   confirmBtn.dataset.dirLabel = dirLbl;
 
-  document.getElementById('orderQtyInput').value = '';
-  // depth-check band % is "sticky" -- reuse whatever was last set, until changed
-  document.getElementById('orderSlippageInput').value = localStorage.getItem('doc_depth_band_pct') || '1.0';
+  // keep lot + band when switching BUY↔SELL; clear only on fresh open
+  document.getElementById('orderQtyInput').value = wasOpen ? prevQty : '';
+  document.getElementById('orderSlippageInput').value = wasOpen && prevBand
+    ? prevBand
+    : (localStorage.getItem('doc_depth_band_pct') || '1.0');
   overlay.classList.add('open');
-  document.getElementById('orderQtyInput').focus();
+  // focus lots field so typing works immediately
+  const qtyEl = document.getElementById('orderQtyInput');
+  qtyEl.focus();
+  qtyEl.select();
   setBackendStatus('checking', 'Checking backend…');
   ensureBackendAwake(setBackendStatus);
   document.getElementById('orderDepthPreview').innerHTML = '';
   startDepthPreviewLoop();
+}
+
+function switchOrderDir(dir){
+  if(!currentOrderParams) return;
+  if(currentOrderParams.dir === dir) return;
+  openOrderQtyModal({ ...currentOrderParams, dir });
 }
 document.getElementById('orderSlippageInput').addEventListener('change', (e)=>{
   localStorage.setItem('doc_depth_band_pct', e.target.value);
@@ -3013,6 +3059,7 @@ function closeOrderQtyModal(){
   const overlay = document.getElementById('orderQtyOverlay');
   overlay.classList.remove('open','dir-buy','dir-sell');
   currentOrderCtx = null;
+  currentOrderParams = null;
   wakeCheckActive = false;
   stopDepthPreviewLoop();
 }
@@ -3549,6 +3596,7 @@ async function openTradeParams(){
         document.getElementById('tpSellRetries').value = s.sell_leg_retries ?? 2;
         document.getElementById('tpStaleSeconds').value = s.stale_data_max_seconds ?? 3.0;
         document.getElementById('tpPollDelay').value = s.fill_poll_delay_ms ?? 50;
+        document.getElementById('tpSkipDepthCheck').checked = !!s.skip_depth_check;
         document.getElementById('tpMarginPrecheckEnabled').checked = s.margin_precheck_enabled !== false;
         document.getElementById('tpMarginCacheSeconds').value = s.margin_precheck_cache_seconds ?? 2.5;
         document.getElementById('tpUnwindEnabled').checked = !!s.unwind_enabled;
@@ -3599,6 +3647,7 @@ document.getElementById('tpSyncBtn').addEventListener('click', async ()=>{
   const sellRetries = parseInt(document.getElementById('tpSellRetries').value, 10);
   const staleSeconds = parseFloat(document.getElementById('tpStaleSeconds').value);
   const pollDelay = parseInt(document.getElementById('tpPollDelay').value, 10);
+  const skipDepthCheck = document.getElementById('tpSkipDepthCheck').checked;
   const marginPrecheckEnabled = document.getElementById('tpMarginPrecheckEnabled').checked;
   const marginCacheSeconds = parseFloat(document.getElementById('tpMarginCacheSeconds').value);
   const unwindEnabled = document.getElementById('tpUnwindEnabled').checked;
@@ -3625,7 +3674,7 @@ document.getElementById('tpSyncBtn').addEventListener('click', async ()=>{
       body: JSON.stringify({
         max_lot_size: maxLot, depth_band_pct: band, inter_leg_delay_ms: interLegDelay,
         sell_leg_retries: sellRetries, stale_data_max_seconds: staleSeconds,
-        fill_poll_delay_ms: pollDelay, margin_precheck_enabled: marginPrecheckEnabled, margin_precheck_cache_seconds: marginCacheSeconds,
+        fill_poll_delay_ms: pollDelay, skip_depth_check: skipDepthCheck, margin_precheck_enabled: marginPrecheckEnabled, margin_precheck_cache_seconds: marginCacheSeconds,
         unwind_enabled: unwindEnabled, circuit_breaker_threshold: circuitThreshold,
         dry_run: dryRun, kill_switch: killSwitch,
         notify_on_success: notifySuccess, notify_on_failure: notifyFailure,
