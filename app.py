@@ -322,8 +322,7 @@ def place_market_leg(symbol, side, size, band_pct=None, dry_run=False, skip_dept
                 ),
                 "depth_available": depth["available"], "depth_checked_pct": band_pct * 100,
             }
-    else:
-        audit("depth_check_skipped", symbol=symbol, side=side, size=size)
+    # skip path: no depth fetch, no extra audit noise — go straight to market order
 
     if dry_run:
         # without depth we have no best_price — use None / 0 placeholder
@@ -343,8 +342,9 @@ def place_market_leg(symbol, side, size, band_pct=None, dry_run=False, skip_dept
         "side": side,
         "order_type": "market_order",
     }
-    audit("order_attempt", symbol=symbol, side=side, size=size,
-          depth_available=depth.get("available"), skip_depth_check=skip_depth_check)
+    if not skip_depth_check:
+        audit("order_attempt", symbol=symbol, side=side, size=size,
+              depth_available=depth.get("available"))
     status, data = _delta_post("/v2/orders", body)
     if not data.get("success"):
         audit("order_reject", symbol=symbol, side=side, response=data)
@@ -353,16 +353,14 @@ def place_market_leg(symbol, side, size, band_pct=None, dry_run=False, skip_dept
     result = data.get("result", {})
     order_id = result.get("id")
     poll_delay = load_settings().get("fill_poll_delay_ms", 50) / 1000.0
+    # Fast path: fewer polls — market orders are usually final on the POST response
+    max_polls = 2 if skip_depth_check else FILL_POLL_ATTEMPTS
 
-    # reconcile: poll actual order state instead of trusting the initial ack.
-    # Check the initial POST response's own state first (market orders often
-    # resolve fast enough that it's already final) -- only start the
-    # sleep/poll loop if a genuine follow-up check is actually needed.
     filled_size, avg_price, state = 0, None, result.get("state")
     filled_size = int(result.get("size", 0)) - int(result.get("unfilled_size", result.get("size", 0)))
     avg_price = result.get("average_fill_price")
     if state not in ("closed", "cancelled", "filled"):
-        for _ in range(FILL_POLL_ATTEMPTS):
+        for _ in range(max_polls):
             time.sleep(poll_delay)
             st, odata = _delta_get(f"/v2/orders/{order_id}")
             if odata.get("success"):
@@ -937,8 +935,7 @@ def place_spread():
                 notify_trade_outcome("failure", f"❌ Order precheck failed: {msg}", settings=settings)
             return jsonify({"ok": False, "leg1": None, "leg2": None, "dry_run": dry_run, "error": msg})
     else:
-        audit("precheck_skipped", reason="skip_depth_check")
-        # still warm product cache in parallel so placement is fast
+        # Fast path: warm product cache only (no depth, no extra audit lines)
         def _warm(sym):
             try:
                 get_product(sym)
@@ -947,7 +944,7 @@ def place_spread():
         tw1 = threading.Thread(target=_warm, args=(buy_leg["symbol"],))
         tw2 = threading.Thread(target=_warm, args=(sell_leg["symbol"],))
         tw1.start(); tw2.start()
-        tw1.join(timeout=8); tw2.join(timeout=8)
+        tw1.join(timeout=5); tw2.join(timeout=5)
 
     # ---- BOTH legs fire SIMULTANEOUSLY (market orders in parallel threads) ----
     # User request: fire both legs at once rather than buy-then-sell sequential.
