@@ -46,7 +46,7 @@
     background:linear-gradient(90deg,var(--accent),var(--accent2),var(--put),var(--atm),var(--accent));
     background-size:200% 100%;animation:flow 8s linear infinite;opacity:.85;}
   @keyframes flow{0%{background-position:0% 0;}100%{background-position:200% 0;}}
-  .app{max-width:1280px;margin:0 auto;padding:22px 18px 0;}
+  .app{max-width:min(1680px,100%);margin:0 auto;padding:16px 12px 0;}
 
   /* header */
   .topbar{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:14px;margin-bottom:16px;}
@@ -206,8 +206,12 @@
   .side-panels{display:none;}
 
   /* ===== compact excel-style side-by-side spread tables ===== */
-  .spread-tables-row{display:grid;grid-template-columns:1fr 1fr;gap:14px;}
-  @media (max-width:820px){.spread-tables-row{grid-template-columns:1fr;}}
+  .spread-tables-row{display:grid;grid-template-columns:1fr 1fr;gap:12px;width:100%;}
+  @media (max-width:900px){.spread-tables-row{grid-template-columns:1fr;}}
+  #viewSpread{width:100%;}
+  .spread-builder-group{width:100%;}
+  .spread-block{min-width:0;width:100%;}
+  table.spread-table{width:100%;min-width:640px;}
 
   .spread-block{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;box-shadow:var(--shadow);}
   .spread-block.call-block{border-left:3px solid var(--call);}
@@ -224,11 +228,28 @@
 
   .spread-block .table-scroll{overflow:auto;max-height:600px;}
   table.spread-table{width:100%;table-layout:fixed;border-collapse:separate;border-spacing:0;font-family:var(--mono);font-size:11.5px;min-width:0;}
-  table.spread-table colgroup col.sp-vol{width:10%;}
-  table.spread-table colgroup col.sp-strike{width:14%;}
-  table.spread-table colgroup col.sp-data{width:15%;}
-  table.spread-table colgroup col.sp-trade{width:18%;}
-  table.spread-table colgroup col.sp-alert{width:9%;}
+  table.spread-table colgroup col.sp-vol{width:5%;}
+  table.spread-table colgroup col.sp-strike{width:8%;}
+  table.spread-table colgroup col.sp-data{width:7%;}
+  table.spread-table colgroup col.sp-max{width:7%;}
+  table.spread-table colgroup col.sp-depth{width:6%;}
+  table.spread-table colgroup col.sp-trade{width:9%;}
+  table.spread-table tbody tr.sp-selected td{background:var(--strike-hl)!important;box-shadow:inset 0 0 0 1px var(--strike-hl-border);}
+  table.spread-table td.depth-ok{color:var(--call);font-weight:700;overflow:visible;text-overflow:clip;}
+  table.spread-table td.depth-low{color:var(--atm);font-weight:700;overflow:visible;text-overflow:clip;}
+  table.spread-table td.depth-none{color:var(--muted2);}
+  table.spread-table td.sp-max-cell{font-weight:800;overflow:visible;text-overflow:clip;font-size:0.95em;}
+  table.spread-table td.sp-mbuy{color:var(--call);}
+  table.spread-table td.sp-msell{color:var(--put);}
+  table.spread-table td.sp-depth-cell{overflow:visible;text-overflow:clip;}
+  /* hide 1A 2B 1B 2A unless .show-depth-detail is on the view */
+  #viewSpread:not(.show-depth-detail) table.spread-table col.sp-depth,
+  #viewSpread:not(.show-depth-detail) table.spread-table th.sp-depth-col,
+  #viewSpread:not(.show-depth-detail) table.spread-table td.sp-depth-cell{display:none;}
+  /* use full builder width — less wasted side padding */
+  .spread-tables-row{gap:10px;}
+  .spread-block .table-scroll{overflow-x:auto;}
+  table.spread-table{font-size:11px;min-width:100%;}
   .sp-trade-btns{display:inline-flex;gap:4px;justify-content:center;white-space:nowrap;}
   .sp-trade-btn{border:1px solid var(--border);background:var(--surface2);font-family:var(--sans);font-weight:800;font-size:10px;width:21px;height:21px;line-height:1;border-radius:5px;cursor:pointer;padding:0;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;}
   .sp-trade-btn.buy{color:var(--call);}
@@ -799,9 +820,18 @@
       <label class="trade-col-toggle" title="Show/hide the Buy/Sell trade column">
         <input type="checkbox" id="tradeColToggle" checked>
         <span class="tct-track"><span class="tct-thumb"></span></span>
-        <span class="tct-label">Trade col (all)</span>
+        <span class="tct-label">Trade col</span>
       </label>
-      <button class="alert-settings-btn" id="alertSettingsBtn" style="margin-left:auto;">🔔 Alerts</button>
+      <label class="trade-col-toggle" title="Subscribe live L2 depth (ATM→OTM only) — turn on only when trading" style="margin-left:auto;">
+        <input type="checkbox" id="liveDepthToggle">
+        <span class="tct-track"><span class="tct-thumb"></span></span>
+        <span class="tct-label">Live depth</span>
+      </label>
+      <label class="trade-col-toggle" title="Show 1A / 2B / 1B / 2A depth detail columns (hidden by default — MBuy/MSell already use them)">
+        <input type="checkbox" id="depthDetailToggle">
+        <span class="tct-track"><span class="tct-thumb"></span></span>
+        <span class="tct-label">Depth cols</span>
+      </label>
       <button class="alert-settings-btn" id="liveTradeSettingsBtn" title="Configure live order execution backend">🔴 Live orders</button>
       <button class="alert-settings-btn" id="accountInfoBtn" title="Live Delta balance, margin mode, positions">📊 Account</button>
       <button class="alert-settings-btn" id="orderLogBtn" title="Audit trail of every order attempt">🧾 Order log</button>
@@ -1264,6 +1294,8 @@ const state = {
   alerts: JSON.parse(localStorage.getItem('doc_alerts') || '[]'),
   tgToken: localStorage.getItem('doc_tg_token') || '',
   tgChatId: localStorage.getItem('doc_tg_chatid') || '',
+  liveDepth: localStorage.getItem('doc_live_depth') === '1',
+  selectedSpreadRow: null,
 };
 
 // ---- portfolios: named, saved sets of payoff legs ----
@@ -1305,7 +1337,7 @@ Object.defineProperty(state, 'payoffLegs', {
 // trade column and its wiring to tradeSpreadBasket/payoff are identical
 // to the original single builder — just parameterized by builder id.
 // ======================================================================
-const BUILDER_IDS = [1, 2, 3];
+const BUILDER_IDS = [1, 2];
 
 function buildSpreadBuilderHTML(n){
   return `
@@ -1347,7 +1379,7 @@ function buildSpreadBuilderHTML(n){
         <div class="table-scroll">
           <table class="spread-table" id="callSpreadTable${n}">
             <colgroup>
-              <col class="sp-vol"><col class="sp-vol"><col class="sp-strike"><col class="sp-strike"><col class="sp-data"><col class="sp-data"><col class="sp-data"><col class="sp-trade"><col class="sp-alert">
+              <col class="sp-vol"><col class="sp-vol"><col class="sp-strike"><col class="sp-strike"><col class="sp-data"><col class="sp-data"><col class="sp-data"><col class="sp-max"><col class="sp-max"><col class="sp-depth"><col class="sp-depth"><col class="sp-depth"><col class="sp-depth"><col class="sp-trade">
             </colgroup>
             <thead><tr>
               <th>VOL1</th>
@@ -1357,8 +1389,13 @@ function buildSpreadBuilderHTML(n){
               <th>LTP</th>
               <th>BID</th>
               <th>ASK</th>
+              <th title="Max base lots to BUY this spread (leg1 ASK + leg2 BID)">MBuy</th>
+              <th title="Max base lots to SELL this spread (leg1 BID + leg2 ASK)">MSell</th>
+              <th class="sp-depth-col" title="Leg1 ASK depth ÷1000">1A</th>
+              <th class="sp-depth-col" title="Leg2 BID depth ÷1000">2B</th>
+              <th class="sp-depth-col" title="Leg1 BID depth ÷1000">1B</th>
+              <th class="sp-depth-col" title="Leg2 ASK depth ÷1000">2A</th>
               <th class="sp-trade-col">TRADE</th>
-              <th class="sp-alert-col">🔔</th>
             </tr></thead>
             <tbody id="callSpreadBody${n}"></tbody>
           </table>
@@ -1378,7 +1415,7 @@ function buildSpreadBuilderHTML(n){
         <div class="table-scroll">
           <table class="spread-table" id="putSpreadTable${n}">
             <colgroup>
-              <col class="sp-vol"><col class="sp-vol"><col class="sp-strike"><col class="sp-strike"><col class="sp-data"><col class="sp-data"><col class="sp-data"><col class="sp-trade"><col class="sp-alert">
+              <col class="sp-vol"><col class="sp-vol"><col class="sp-strike"><col class="sp-strike"><col class="sp-data"><col class="sp-data"><col class="sp-data"><col class="sp-max"><col class="sp-max"><col class="sp-depth"><col class="sp-depth"><col class="sp-depth"><col class="sp-depth"><col class="sp-trade">
             </colgroup>
             <thead><tr>
               <th>VOL1</th>
@@ -1388,8 +1425,13 @@ function buildSpreadBuilderHTML(n){
               <th>LTP</th>
               <th>BID</th>
               <th>ASK</th>
+              <th title="Max base lots to BUY this spread (leg1 ASK + leg2 BID)">MBuy</th>
+              <th title="Max base lots to SELL this spread (leg1 BID + leg2 ASK)">MSell</th>
+              <th class="sp-depth-col" title="Leg1 ASK depth ÷1000">1A</th>
+              <th class="sp-depth-col" title="Leg2 BID depth ÷1000">2B</th>
+              <th class="sp-depth-col" title="Leg1 BID depth ÷1000">1B</th>
+              <th class="sp-depth-col" title="Leg2 ASK depth ÷1000">2A</th>
               <th class="sp-trade-col">TRADE</th>
-              <th class="sp-alert-col">🔔</th>
             </tr></thead>
             <tbody id="putSpreadBody${n}"></tbody>
           </table>
@@ -1594,6 +1636,31 @@ tradeColToggle.addEventListener('change', ()=>{
   viewSpreadEl.classList.toggle('hide-trade-col', !tradeColToggle.checked);
   localStorage.setItem('doc_spread_trade_col_all', tradeColToggle.checked ? 'on' : 'off');
 });
+
+const liveDepthToggle = document.getElementById('liveDepthToggle');
+if(liveDepthToggle){
+  liveDepthToggle.checked = !!state.liveDepth;
+  liveDepthToggle.addEventListener('change', ()=>{
+    state.liveDepth = liveDepthToggle.checked;
+    localStorage.setItem('doc_live_depth', state.liveDepth ? '1' : '0');
+    if(!state.liveDepth){
+      Object.keys(depthCache).forEach(k=>delete depthCache[k]);
+    }
+    renderSpreads();
+  });
+}
+const depthDetailToggle = document.getElementById('depthDetailToggle');
+const viewSpreadEl2 = document.getElementById('viewSpread');
+if(depthDetailToggle && viewSpreadEl2){
+  const saved = localStorage.getItem('doc_depth_detail') === '1';
+  depthDetailToggle.checked = saved;
+  viewSpreadEl2.classList.toggle('show-depth-detail', saved);
+  depthDetailToggle.addEventListener('change', ()=>{
+    const on = depthDetailToggle.checked;
+    localStorage.setItem('doc_depth_detail', on ? '1' : '0');
+    viewSpreadEl2.classList.toggle('show-depth-detail', on);
+  });
+}
 
 // ---- view toggle: swaps entire content area (fresh window feel), not stacked ----
 // Single source of truth for switching views — used by the nav bar AND by
@@ -2262,13 +2329,268 @@ function nearestInArray(arr, target){
   return best;
 }
 
+
+// ==================== LIVE DEPTH (public L2 — no API keys) ====================
+// Primary: REST https://api.india.delta.exchange/v2/l2orderbook/{symbol}
+// Optional: public WS ob_l2 for push updates
+// Only ATM→OTM symbols are fetched (depthWanted filled in renderSideSpread)
+const depthCache = {};
+let depthWanted = new Set();
+let depthPollTimer = null;
+let depthPolling = false;
+let depthWs = null;
+let depthWsSymbols = [];
+
+function depthSizeFor(symbol, side){
+  if(!symbol) return null;
+  const d = depthCache[symbol];
+  if(!d) return null;
+  return side === 'buy' ? d.askSize : d.bidSize;
+}
+// display depth in '000s (e.g. 7352 → 7.4)
+function fmtDepth(v){
+  if(v == null || isNaN(v)) return '—';
+  const x = v / 1000;
+  if(x >= 100) return fmt(x, 0);
+  if(x >= 10) return fmt(x, 1);
+  return fmt(x, 2);
+}
+
+function patchDepthCells(){
+  document.querySelectorAll('#viewSpread table.spread-table tbody tr[data-rowkey]').forEach(tr=>{
+    const side = tr.dataset.side;
+    const s1 = parseFloat(tr.dataset.s1);
+    const s2 = tr.dataset.s2 === '' ? null : parseFloat(tr.dataset.s2);
+    const e1 = tr.dataset.e1, e2 = tr.dataset.e2;
+    const ratio = parseFloat(tr.dataset.ratio) || 1;
+    const ctype = side === 'call' ? 'call_options' : 'put_options';
+    const leg1 = state.raw.find(r=>r.strike===s1 && r.expiry===e1 && r.contract_type===ctype);
+    const leg2 = (s2!=null && !isNaN(s2)) ? state.raw.find(r=>r.strike===s2 && r.expiry===e2 && r.contract_type===ctype) : null;
+    const atm = state.spot != null ? state.spot : null;
+    const otm1 = atm == null ? true : (side === 'call' ? s1 >= atm - 1e-9 : s1 <= atm + 1e-9);
+    const otm2 = (s2 == null || atm == null) ? false : (side === 'call' ? s2 > atm + 1e-9 : s2 < atm - 1e-9);
+    const a1 = otm1 ? depthSizeFor(leg1?.symbol, 'buy') : null;
+    const b2 = (otm1 && otm2) ? depthSizeFor(leg2?.symbol, 'sell') : null;
+    const b1 = otm1 ? depthSizeFor(leg1?.symbol, 'sell') : null;
+    const a2 = (otm1 && otm2) ? depthSizeFor(leg2?.symbol, 'buy') : null;
+    const ratioSafe = Math.max(ratio, 0.0001);
+    const maxBuy = (a1!=null && b2!=null) ? Math.floor(Math.min(a1, b2/ratioSafe)) : null;
+    const maxSell = (b1!=null && a2!=null) ? Math.floor(Math.min(b1, a2/ratioSafe)) : null;
+    const cells = tr.querySelectorAll('td');
+    if(cells.length < 13) return;
+    const cls = v => 'sp-depth-cell ' + (v==null ? 'depth-none' : (v>0 ? 'depth-ok' : 'depth-low'));
+    const mcls = v => 'sp-max-cell ' + (v==null ? 'depth-none' : (v>0 ? 'depth-ok' : 'depth-low'));
+    cells[7].textContent = maxBuy==null ? '—' : fmt(maxBuy,0);
+    cells[7].className = 'sp-max-cell sp-mbuy ' + (maxBuy==null ? 'depth-none' : (maxBuy>0 ? 'depth-ok' : 'depth-low'));
+    cells[7].title = 'BUY max lots · 1A=' + (a1==null?'—':fmtDepth(a1)) + '  2B=' + (b2==null?'—':fmtDepth(b2));
+    cells[8].textContent = maxSell==null ? '—' : fmt(maxSell,0);
+    cells[8].className = 'sp-max-cell sp-msell ' + (maxSell==null ? 'depth-none' : (maxSell>0 ? 'depth-ok' : 'depth-low'));
+    cells[8].title = 'SELL max lots · 1B=' + (b1==null?'—':fmtDepth(b1)) + '  2A=' + (a2==null?'—':fmtDepth(a2));
+    cells[9].textContent = a1==null ? '—' : fmtDepth(a1);
+    cells[9].className = cls(a1);
+    cells[10].textContent = b2==null ? '—' : fmtDepth(b2);
+    cells[10].className = cls(b2);
+    cells[11].textContent = b1==null ? '—' : fmtDepth(b1);
+    cells[11].className = cls(b1);
+    cells[12].textContent = a2==null ? '—' : fmtDepth(a2);
+    cells[12].className = cls(a2);
+  });
+}
+
+function sumNearBest(levels, side, bandPct){
+  if(!levels || !levels.length) return { size: 0, best: null };
+  // levels may be [{price,size}] or [[price,size], ...]
+  const norm = levels.map(l => Array.isArray(l)
+    ? { price: parseFloat(l[0]), size: parseFloat(l[1]||0) }
+    : { price: parseFloat(l.price), size: parseFloat(l.size||0) }
+  ).filter(l => isFinite(l.price) && isFinite(l.size));
+  if(!norm.length) return { size: 0, best: null };
+  const best = norm[0].price;
+  const cutoff = side === 'buy' ? best * (1 - bandPct) : best * (1 + bandPct);
+  let size = 0;
+  for(const l of norm){
+    if(side === 'buy'){ if(l.price < cutoff) break; }
+    else { if(l.price > cutoff) break; }
+    size += l.size;
+  }
+  return { size, best };
+}
+
+function applyOrderbookSnapshot(symbol, book){
+  if(!symbol || !book) return;
+  const band = (parseFloat(localStorage.getItem('doc_depth_band_pct')) || 1.0) / 100;
+  // classic format: buy/sell arrays of {price,size}
+  // compact ob_l2 format: b = bids [[px,sz]...], a = asks [[px,sz]...]
+  const bids = book.buy || book.bids || book.b || [];
+  const asks = book.sell || book.asks || book.a || [];
+  const bid = sumNearBest(bids, 'buy', band);
+  const ask = sumNearBest(asks, 'sell', band);
+  depthCache[symbol] = {
+    bidSize: bid.size, askSize: ask.size,
+    bestBid: bid.best, bestAsk: ask.best,
+    ts: Date.now(),
+  };
+}
+
+async function fetchDepthRest(symbol){
+  try{
+    const res = await fetch('https://api.india.delta.exchange/v2/l2orderbook/' + encodeURIComponent(symbol));
+    if(!res.ok) return;
+    const json = await res.json();
+    const book = json.result || json;
+    applyOrderbookSnapshot(symbol, book);
+  }catch(e){
+    // ignore single-symbol failures
+  }
+}
+
+async function pollDepthBatch(){
+  if(!state.liveDepth || depthPolling) return;
+  const spot = state.spot;
+  const symbols = [...depthWanted].filter(Boolean).sort((a,b)=>{
+    // prefer symbols whose strike is closer to spot (ATM first)
+    const strikeOf = sym => {
+      const m = /(?:C|P)-(?:BTC|ETH|XAUT)-(\d+)-/.exec(sym);
+      return m ? parseFloat(m[1]) : null;
+    };
+    if(spot == null) return 0;
+    const da = Math.abs((strikeOf(a) ?? spot) - spot);
+    const db = Math.abs((strikeOf(b) ?? spot) - spot);
+    return da - db;
+  }).slice(0, 48);
+  if(symbols.length === 0) return;
+  depthPolling = true;
+  try{
+    // parallel batches of 6 to stay gentle on rate limits
+    for(let i = 0; i < symbols.length; i += 6){
+      const chunk = symbols.slice(i, i + 6);
+      await Promise.all(chunk.map(fetchDepthRest));
+    }
+    // patch D1/D2/MAX cells in-place (no full rebuild — avoids resubscribe loops)
+    if(state.view === 'spread') patchDepthCells();
+  } finally {
+    depthPolling = false;
+  }
+}
+
+function startDepthPolling(){
+  if(!state.liveDepth){ stopDepthPolling(); return; }
+  if(!depthPollTimer){
+    depthPollTimer = setInterval(pollDepthBatch, 2500);
+  }
+  pollDepthBatch(); // immediate refresh
+}
+
+function stopDepthPolling(){
+  if(depthPollTimer){ clearInterval(depthPollTimer); depthPollTimer = null; }
+  depthPolling = false;
+}
+
+function connectDepthWs(symbols){
+  if(!state.liveDepth) return;
+  const uniq = [...new Set(symbols)].filter(Boolean).slice(0, 60);
+  const same = uniq.length === depthWsSymbols.length && uniq.every((s,i)=>s===depthWsSymbols[i]);
+  if(same && depthWs && depthWs.readyState === 1) return;
+  depthWsSymbols = uniq;
+  if(depthWs){ try{ depthWs.close(); }catch(e){} depthWs = null; }
+  if(uniq.length === 0) return;
+  // new public endpoint + compact channel (legacy l2_orderbook still tried as fallback name in subscribe)
+  let url = 'wss://public-socket.india.delta.exchange';
+  try{ depthWs = new WebSocket(url); }
+  catch(e){
+    try{ depthWs = new WebSocket('wss://socket.india.delta.exchange'); }
+    catch(e2){ console.warn('[DEPTH-WS] construct failed', e2); return; }
+  }
+  depthWs.onopen = ()=>{
+    // subscribe both names — server accepts whichever it still supports
+    depthWs.send(JSON.stringify({
+      type: 'subscribe',
+      payload: { channels: [
+        { name: 'ob_l2', symbols: uniq },
+        { name: 'l2_orderbook', symbols: uniq },
+      ] }
+    }));
+    console.info('[DEPTH-WS] subscribed', uniq.length, 'symbols');
+  };
+  depthWs.onmessage = (evt)=>{
+    let msg;
+    try{ msg = JSON.parse(evt.data); }catch(e){ return; }
+    const t = msg.type;
+    if(t === 'ob_l2' || t === 'l2_orderbook' || t === 'l2_orderbook_snapshot'){
+      const sym = msg.sy || msg.symbol || (msg.orderbook && msg.orderbook.symbol);
+      if(sym) applyOrderbookSnapshot(sym, msg.orderbook || msg);
+    }
+  };
+  depthWs.onclose = ()=>{
+    if(state.liveDepth) setTimeout(()=>connectDepthWs(depthWanted.size ? [...depthWanted] : depthWsSymbols), 4000);
+  };
+  depthWs.onerror = ()=>{};
+}
+
+function syncDepthSubscriptions(){
+  if(!state.liveDepth){
+    stopDepthPolling();
+    if(depthWs){ try{ depthWs.close(); }catch(e){} depthWs = null; }
+    depthWsSymbols = [];
+    return;
+  }
+  startDepthPolling();
+  connectDepthWs([...depthWanted]);
+}
+
+function selectSpreadRow(tr){
+  document.querySelectorAll('table.spread-table tbody tr.sp-selected').forEach(r=>r.classList.remove('sp-selected'));
+  if(!tr) return;
+  tr.classList.add('sp-selected');
+  tr.scrollIntoView({ block: 'nearest' });
+  state.selectedSpreadRow = tr;
+}
+
+function openOrderFromSelected(dir){
+  const tr = state.selectedSpreadRow;
+  if(!tr || !tr.dataset.s1) return;
+  const s2 = tr.dataset.s2 === '' ? NaN : parseFloat(tr.dataset.s2);
+  openOrderQtyModal({
+    side: tr.dataset.side,
+    s1: parseFloat(tr.dataset.s1),
+    s2,
+    expiry1: tr.dataset.e1,
+    expiry2: tr.dataset.e2,
+    ratio: (v => isNaN(v) ? 1 : v)(parseFloat(tr.dataset.ratio)),
+    mode: tr.dataset.mode,
+    dir,
+  });
+}
+
+// keyboard: ↑↓ select row, + buy modal, - sell modal (when on spread view, not in an input)
+document.addEventListener('keydown', (e)=>{
+  if(state.view !== 'spread') return;
+  const tag = (e.target && e.target.tagName || '').toLowerCase();
+  if(tag === 'input' || tag === 'select' || tag === 'textarea' || e.target.isContentEditable) return;
+  if(e.key === 'ArrowDown' || e.key === 'ArrowUp'){
+    e.preventDefault();
+    const rows = [...document.querySelectorAll('#viewSpread table.spread-table tbody tr[data-rowkey]')];
+    if(!rows.length) return;
+    let idx = rows.indexOf(state.selectedSpreadRow);
+    if(idx < 0) idx = e.key === 'ArrowDown' ? -1 : 0;
+    idx = e.key === 'ArrowDown' ? Math.min(rows.length-1, idx+1) : Math.max(0, idx-1);
+    selectSpreadRow(rows[idx]);
+  } else if(e.key === '+' || e.key === '='){
+    e.preventDefault();
+    openOrderFromSelected('buy');
+  } else if(e.key === '-' || e.key === '_'){
+    e.preventDefault();
+    openOrderFromSelected('sell');
+  }
+});
+
 function renderSideSpread(n, side, sign){
   const mode = spreadState[n].mode;
   const expiry1 = spreadEls[n].expiry.value || state.activeExpiry;
   const expiry2 = mode === 'calendar' ? (spreadEls[n].expiry2.value || expiry1) : expiry1;
   const els = spreadEls[n][side];
   const body = document.getElementById(side+'SpreadBody'+n);
-  const COLS = 9;
+  const COLS = 14;
 
   if(!expiry1 || (mode==='calendar' && !expiry2)){
     body.innerHTML = `<tr><td colspan="${COLS}"><div class="spread-warning">Select ${mode==='calendar'?'both expiries':'an expiry'} to generate the ladder</div></td></tr>`;
@@ -2332,7 +2654,6 @@ function renderSideSpread(n, side, sign){
   const volCell = leg => leg && leg.volume != null ? fmt(leg.volume,2) : '<span class="na">—</span>';
 
   let rows = '';
-  const rowValues = {};
   strikes1.forEach(s1=>{
     const target = s1 + sign*gap;
     const rounded = Math.round(target);
@@ -2407,12 +2728,38 @@ function renderSideSpread(n, side, sign){
           : { sym1: leg1.symbol, sym2: leg2.symbol, ratio, side, s1: s1, s2: s2, modeLabel: 'Ratio spread · '+expiry1 };
       }
     }
+    const ratioSafe = Math.max(ratio || 1, 0.0001);
+    const sym1 = leg1?.symbol || null;
+    const sym2 = leg2?.symbol || null;
+    // Strike1 must be ATM or OTM to show ANY depth on the row.
+    // Strike2: strict OTM only (ATM strike2 ignored for depth).
+    // 4 depths:
+    //   BUY spread  → leg1 ASK (1A) + leg2 BID (2B)
+    //   SELL spread → leg1 BID (1B) + leg2 ASK (2A)
+    const isOtmAtm1 = (state.spot == null || atmStrike == null) ? true
+      : (side === 'call' ? s1 >= atmStrike - 1e-9 : s1 <= atmStrike + 1e-9);
+    const isOtmAtm2 = (s2 == null || state.spot == null || atmStrike == null) ? false
+      : (side === 'call' ? s2 > atmStrike + 1e-9 : s2 < atmStrike - 1e-9);
+    if(state.liveDepth && isOtmAtm1){
+      if(sym1) depthWanted.add(sym1);
+      if(sym2 && isOtmAtm2) depthWanted.add(sym2);
+    }
+    // raw sizes (contracts)
+    const a1 = isOtmAtm1 ? depthSizeFor(sym1, 'buy') : null;   // leg1 ASK
+    const b2 = (isOtmAtm1 && isOtmAtm2) ? depthSizeFor(sym2, 'sell') : null; // leg2 BID
+    const b1 = isOtmAtm1 ? depthSizeFor(sym1, 'sell') : null;  // leg1 BID
+    const a2 = (isOtmAtm1 && isOtmAtm2) ? depthSizeFor(sym2, 'buy') : null;  // leg2 ASK
+    let maxBuyLots = null, maxSellLots = null;
+    if(a1 != null && b2 != null){
+      maxBuyLots = Math.floor(Math.min(a1, b2 / ratioSafe));
+    }
+    if(b1 != null && a2 != null){
+      maxSellLots = Math.floor(Math.min(b1, a2 / ratioSafe));
+    }
+    const cls = v => v == null ? 'depth-none' : (v > 0 ? 'depth-ok' : 'depth-low');
 
-    const alertId = `${n}|${side}|${expiry1}|${expiry2}|${s1}|${s2!==null?s2:''}`;
-    rowValues[alertId] = { ltp, bid: bidV, ask: askV };
-    const hasAlert = state.alerts.some(a=>a.id===alertId);
-
-    rows += `<tr class="${isAtm?'atm-row':''}" data-alertid="${alertId}">
+    const rowKey = `${n}|${side}|${expiry1}|${expiry2}|${s1}|${s2!==null?s2:''}`;
+    rows += `<tr class="${isAtm?'atm-row':''}" data-rowkey="${rowKey}" data-side="${side}" data-s1="${s1}" data-s2="${s2!==null?s2:''}" data-e1="${expiry1}" data-e2="${expiry2}" data-ratio="${ratio}" data-mode="${mode}" data-builder="${n}">
       <td>${vol1Cell}</td>
       <td>${vol2Cell}</td>
       <td class="strike-cell">${strike1Disp}</td>
@@ -2420,19 +2767,16 @@ function renderSideSpread(n, side, sign){
       <td class="${canChart?'sp-ltp-cell':''}" ${canChart?`data-chart='${JSON.stringify(chartCtx)}' title="Click for spread history chart"`:''}>${cell(ltp)}</td>
       <td class="bid">${cell(bidV)}</td>
       <td class="ask">${cell(askV)}</td>
+      <td class="sp-max-cell sp-mbuy ${cls(maxBuyLots)}" title="BUY max lots · 1A=${a1==null?'—':fmtDepth(a1)}  2B=${b2==null?'—':fmtDepth(b2)}">${maxBuyLots==null?'—':fmt(maxBuyLots,0)}</td>
+      <td class="sp-max-cell sp-msell ${cls(maxSellLots)}" title="SELL max lots · 1B=${b1==null?'—':fmtDepth(b1)}  2A=${a2==null?'—':fmtDepth(a2)}">${maxSellLots==null?'—':fmt(maxSellLots,0)}</td>
+      <td class="sp-depth-cell ${cls(a1)}" title="Leg1 ASK ÷1000">${a1==null?'—':fmtDepth(a1)}</td>
+      <td class="sp-depth-cell ${cls(b2)}" title="Leg2 BID ÷1000">${b2==null?'—':fmtDepth(b2)}</td>
+      <td class="sp-depth-cell ${cls(b1)}" title="Leg1 BID ÷1000">${b1==null?'—':fmtDepth(b1)}</td>
+      <td class="sp-depth-cell ${cls(a2)}" title="Leg2 ASK ÷1000">${a2==null?'—':fmtDepth(a2)}</td>
       <td class="sp-trade-col">${tradeBtns}</td>
-      <td class="sp-alert-col"><button class="bell-btn${hasAlert?' set':''}" data-alertid="${alertId}">🔔</button></td>
     </tr>`;
   });
   body.innerHTML = rows;
-
-  body.querySelectorAll('.bell-btn').forEach(btn=>{
-    btn.addEventListener('click', (e)=>{
-      e.stopPropagation();
-      openAlertPopover(btn.dataset.alertid);
-    });
-  });
-  evaluateAlerts(rowValues, body);
 
   body.querySelectorAll('.sp-ltp-cell').forEach(td=>{
     td.addEventListener('click', ()=>{
@@ -2452,9 +2796,14 @@ function renderSideSpread(n, side, sign){
         mode: btn.dataset.mode,
         dir: btn.dataset.dir,
       });
-      const row = btn.closest('tr');
-      row.style.transition='none'; row.style.background='var(--strike-hl)';
-      requestAnimationFrame(()=>{ row.style.transition='background .6s'; row.style.background=''; });
+      selectSpreadRow(btn.closest('tr'));
+    });
+  });
+
+  body.querySelectorAll('tr[data-rowkey]').forEach(tr=>{
+    tr.addEventListener('click', (e)=>{
+      if(e.target.closest('.sp-trade-btn') || e.target.closest('.sp-ltp-cell')) return;
+      selectSpreadRow(tr);
     });
   });
 }
@@ -3546,10 +3895,19 @@ document.getElementById('shRange').addEventListener('click', e=>{
 
 
 function renderSpreads(){
+  depthWanted = new Set();
   BUILDER_IDS.forEach(n=>{
     renderSideSpread(n, 'call', 1);
     renderSideSpread(n, 'put', -1);
   });
+  // re-select previous row if still present
+  if(state.selectedSpreadRow && state.selectedSpreadRow.dataset){
+    const key = state.selectedSpreadRow.dataset.rowkey;
+    const still = key && document.querySelector(`tr[data-rowkey="${key}"]`);
+    if(still) selectSpreadRow(still);
+    else state.selectedSpreadRow = null;
+  }
+  syncDepthSubscriptions();
 }
 
 function renderEmpty(msg, err){
@@ -4780,12 +5138,16 @@ function renderActiveAlertsList(){
     });
   });
 }
-document.getElementById('alertSettingsBtn').addEventListener('click', ()=>{
-  document.getElementById('tgToken').value = state.tgToken;
-  document.getElementById('tgChatId').value = state.tgChatId;
-  renderActiveAlertsList();
-  document.getElementById('settingsOverlay').classList.add('open');
-});
+(function(){
+  const btn = document.getElementById('alertSettingsBtn');
+  if(!btn) return;
+  btn.addEventListener('click', ()=>{
+    document.getElementById('tgToken').value = state.tgToken;
+    document.getElementById('tgChatId').value = state.tgChatId;
+    renderActiveAlertsList();
+    document.getElementById('settingsOverlay').classList.add('open');
+  });
+})();
 document.getElementById('settingsCloseBtn').addEventListener('click', ()=>{
   document.getElementById('settingsOverlay').classList.remove('open');
 });

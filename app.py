@@ -926,58 +926,74 @@ def place_spread():
             notify_trade_outcome("failure", f"❌ Order precheck failed: {msg}", settings=settings)
         return jsonify({"ok": False, "leg1": None, "leg2": None, "dry_run": dry_run, "error": msg})
 
-    # ---- leg 1: BUY fires FIRST (uses less/no margin) ----
-    # If this fails, nothing has happened yet -- clean abort, nothing to
-    # unwind. If leg 2 (sell) later fails, the leftover position is a
-    # bounded-risk naked LONG (worst case: lose the premium already paid),
-    # not an uncovered short -- the safer failure mode to be left holding.
-    buy_result = place_market_leg(buy_leg["symbol"], "buy", buy_leg["size"], depth_band_pct, dry_run=dry_run)
-    if not buy_result["ok"]:
-        msg = "Buy leg did not fill (or insufficient orderbook depth) — no position taken, sell leg was not attempted."
+    # ---- BOTH legs fire SIMULTANEOUSLY (market orders in parallel threads) ----
+    # User request: fire both legs at once rather than buy-then-sell sequential.
+    # Risk trade-off: either leg can fail independently, leaving a residual
+    # position on the other. Precheck already confirmed depth on both sides;
+    # sell still gets optional retries if the first parallel attempt fails.
+    sell_size = max(1, int(sell_leg["size"]))  # nominal; adjusted only if buy partial-fills after
+
+    buy_result_box = [None]
+    sell_result_box = [None]
+
+    def _fire_buy():
+        buy_result_box[0] = place_market_leg(buy_leg["symbol"], "buy", buy_leg["size"], depth_band_pct, dry_run=dry_run)
+
+    def _fire_sell():
+        sell_result_box[0] = place_market_leg(sell_leg["symbol"], "sell", sell_size, depth_band_pct, dry_run=dry_run)
+
+    tb = threading.Thread(target=_fire_buy)
+    ts = threading.Thread(target=_fire_sell)
+    tb.start(); ts.start()
+    tb.join(timeout=30); ts.join(timeout=30)
+    buy_result = buy_result_box[0] or {"symbol": buy_leg["symbol"], "ok": False, "filled_size": 0, "error": "buy thread failed/timed out"}
+    sell_result = sell_result_box[0] or {"symbol": sell_leg["symbol"], "ok": False, "filled_size": 0, "error": "sell thread failed/timed out"}
+
+    # optional sell retries if first simultaneous attempt got nothing
+    if (not sell_result.get("ok") or sell_result.get("filled_size", 0) == 0) and buy_result.get("ok"):
+        for attempt in range(settings.get("sell_leg_retries", 2)):
+            sell_result = place_market_leg(sell_leg["symbol"], "sell", sell_size, depth_band_pct, dry_run=dry_run)
+            if sell_result.get("ok") and sell_result.get("filled_size", 0) > 0:
+                break
+
+    # ---- both failed ----
+    if not buy_result.get("ok") and (not sell_result or sell_result.get("filled_size", 0) == 0):
+        msg = "Both legs failed to fill — no position taken."
         if not dry_run:
             record_outcome(False)
-            notify_trade_outcome("failure", f"❌ Buy leg failed, nothing placed: {buy_leg['symbol']} — {buy_result.get('error','')}", settings=settings)
-        return jsonify({"ok": False, "leg1": buy_result, "leg2": None, "dry_run": dry_run, "error": msg})
+            notify_trade_outcome("failure", f"❌ Both legs failed: {buy_leg['symbol']} / {sell_leg['symbol']}", settings=settings)
+        return jsonify({"ok": False, "leg1": buy_result, "leg2": sell_result, "dry_run": dry_run, "error": msg})
 
-    # size the sell leg proportionally to whatever fraction of the buy
-    # actually filled (handles partial fills cleanly, keeps the ratio intact)
-    fill_fraction = buy_result["filled_size"] / buy_leg["size"]
-    sell_size = max(1, round(sell_leg["size"] * fill_fraction))
+    # ---- buy failed, sell filled → residual SHORT (dangerous) ----
+    if not buy_result.get("ok") and sell_result.get("filled_size", 0) > 0:
+        unwind_result = None
+        if settings.get("unwind_enabled") and not dry_run:
+            # buy back the short to flatten
+            unwind_result = unwind_leg(sell_leg["symbol"], "buy", sell_result["filled_size"], depth_band_pct, dry_run)
+        msg = (
+            f"Buy leg failed but sell filled ({sell_result['filled_size']} lots on {sell_leg['symbol']}) — residual SHORT. "
+            + ("Auto-unwind attempted." if settings.get("unwind_enabled") else "Auto-unwind OFF — close manually NOW.")
+        )
+        if not dry_run:
+            record_outcome(False)
+            notify_trade_outcome("naked_position", f"🚨 RESIDUAL SHORT: {sell_result['filled_size']} lots {sell_leg['symbol']}. {msg}", settings=settings)
+        return jsonify({"ok": False, "leg1": buy_result, "leg2": sell_result, "unwind": unwind_result, "dry_run": dry_run, "error": msg})
 
-    # optional deliberate pause between legs, entirely user-controlled via
-    # the Trade Params panel (0 = fire the sell leg immediately, default)
-    inter_leg_delay_ms = settings.get("inter_leg_delay_ms", 0)
-    if inter_leg_delay_ms > 0:
-        audit("inter_leg_delay", delay_ms=inter_leg_delay_ms)
-        time.sleep(inter_leg_delay_ms / 1000.0)
-
-    # ---- leg 2: SELL fires SECOND, with retries (margin-gated side) ----
-    sell_result = None
-    for attempt in range(settings.get("sell_leg_retries", 2) + 1):
-        sell_result = place_market_leg(sell_leg["symbol"], "sell", sell_size, depth_band_pct, dry_run=dry_run)
-        if sell_result["ok"]:
-            break
-
-    if not sell_result or sell_result["filled_size"] == 0:
-        # Sell leg is dead -- buy leg (bounded-risk naked long) is left
-        # standing. Auto-unwind is OPT-IN (Trade Params toggle, off by
-        # default): if enabled, fire an immediate opposite-side order to
-        # flatten it; either way, this gets its own urgent notification
-        # channel distinct from generic failures.
+    # ---- sell failed, buy filled → residual LONG (bounded) ----
+    if buy_result.get("ok") and (not sell_result or sell_result.get("filled_size", 0) == 0):
         unwind_result = None
         if settings.get("unwind_enabled") and not dry_run:
             unwind_result = unwind_leg(buy_leg["symbol"], "sell", buy_result["filled_size"], depth_band_pct, dry_run)
 
         if unwind_result and unwind_result.get("ok") and unwind_result.get("filled_size", 0) >= buy_result["filled_size"]:
             msg = f"Sell leg failed after retries, but auto-unwind flattened the buy leg ({buy_result['filled_size']} lots on {buy_leg['symbol']}). No net position taken."
-            notify_kind, notify_msg = "naked_position", f"⚠️ Sell leg failed but auto-unwound successfully — {buy_leg['symbol']} flattened, no leftover position."
+            notify_kind, notify_msg = "naked_position", f"⚠️ Sell leg failed but auto-unwound successfully — {buy_leg['symbol']} flattened."
         else:
             msg = (
-                f"Sell leg failed after retries (insufficient margin, thin book, or rejected). "
-                f"You have a naked LONG position of {buy_result['filled_size']} lots on {buy_leg['symbol']} left over from the buy leg. "
-                + ("Auto-unwind was attempted but did not fully succeed — check Delta NOW." if settings.get("unwind_enabled") else "Auto-unwind is OFF (enable in Trade Params if you want this handled automatically) — review manually.")
-            ) if not dry_run else "Sell leg simulation failed (insufficient depth) after retries. (dry run — no real position was taken on either leg.)"
-            notify_kind, notify_msg = "naked_position", f"🚨 NAKED POSITION: sell leg failed, {buy_result['filled_size']} lots of {buy_leg['symbol']} left uncovered. {'Unwind attempted, check Delta.' if settings.get('unwind_enabled') else 'Auto-unwind is OFF — action needed.'}"
+                f"Sell leg failed after retries. Naked LONG of {buy_result['filled_size']} lots on {buy_leg['symbol']}. "
+                + ("Auto-unwind attempted but incomplete — check Delta." if settings.get("unwind_enabled") else "Auto-unwind OFF — review manually.")
+            ) if not dry_run else "Sell leg simulation failed after retries. (dry run — no real position.)"
+            notify_kind, notify_msg = "naked_position", f"🚨 NAKED LONG: {buy_result['filled_size']} lots of {buy_leg['symbol']} uncovered."
 
         if not dry_run:
             record_outcome(False)
