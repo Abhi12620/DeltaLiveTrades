@@ -14,8 +14,16 @@ import requests
 # instead of paying a fresh handshake (~50-150ms) on every single request.
 # With ~10-15 Delta API calls per order (mostly sequential by design), this
 # is pure upside -- no behavior change, just less time spent connecting.
+# Pool size explicitly widened: default urllib3 pool_maxsize is 10, which is
+# fine normally, but with buy+sell legs now firing as concurrent threads
+# (fast mode) plus background reconciliation/telegram threads running at the
+# same time, a few extra concurrent connections to the same host is cheap
+# insurance against any of them queueing for a free connection.
 SESSION = requests.Session()
 SESSION.headers.update({"Accept": "application/json"})
+_adapter = requests.adapters.HTTPAdapter(pool_connections=20, pool_maxsize=20)
+SESSION.mount("https://", _adapter)
+SESSION.mount("http://", _adapter)
 
 app = Flask(__name__)
 CORS(app)
@@ -61,6 +69,7 @@ _DEFAULT_SETTINGS = {
     "depth_band_pct": float(os.environ.get("DEPTH_BAND_PCT", "1.0")),  # stored as a PERCENT (e.g. 1.0 = 1%)
     "inter_leg_delay_ms": int(os.environ.get("INTER_LEG_DELAY_MS", "0")),  # deliberate pause AFTER the buy leg confirms, BEFORE the sell leg fires (0 = fire as soon as ready)
     "fill_poll_delay_ms": 50,     # gap between order-status polls while waiting for a fill to confirm
+    "fast_mode_poll_delay_ms": 25,  # separate, more aggressive poll gap used ONLY when skip_depth_check is on -- fast-mode traders already accepted the depth-check tradeoff, so a tighter poll loop is consistent with that choice
     "skip_depth_check": False,  # ON = fire market orders immediately, no L2 depth precheck (faster; you already saw depth on the dashboard)
     "margin_precheck_enabled": True,   # OFF skips the wallet-balance gate entirely (saves a Delta call) -- fine if you trade infrequently and margin is rarely an issue
     "margin_precheck_cache_seconds": 2.5,  # how long a fetched balance is trusted before refetching
@@ -79,20 +88,36 @@ _DEFAULT_SETTINGS = {
 }
 
 
+_settings_cache = {"data": None, "loaded": False}
+
+
 def load_settings():
+    """In-memory cached after the first read -- previously this hit disk +
+    JSON-parsed EVERY call, and a single order calls load_settings() up to
+    ~7-9 times internally (place_spread, both legs' place_market_leg calls,
+    record_outcome, credentials lookup, etc). Render runs this app as a
+    single worker process (WEB_CONCURRENCY=1), so an in-memory cache stays
+    consistent -- save_settings() below keeps it in sync on every write."""
     with _settings_lock:
+        if _settings_cache["loaded"]:
+            return dict(_settings_cache["data"])
         try:
             with open(SETTINGS_PATH) as f:
                 s = json.load(f)
-            return {**_DEFAULT_SETTINGS, **s}
+            merged = {**_DEFAULT_SETTINGS, **s}
         except Exception:
-            return dict(_DEFAULT_SETTINGS)
+            merged = dict(_DEFAULT_SETTINGS)
+        _settings_cache["data"] = merged
+        _settings_cache["loaded"] = True
+        return dict(merged)
 
 
 def save_settings(new_settings):
     with _settings_lock:
         with open(SETTINGS_PATH, "w") as f:
             json.dump(new_settings, f)
+        _settings_cache["data"] = dict(new_settings)
+        _settings_cache["loaded"] = True
 
 
 _product_cache = {}      # symbol -> {id, tick_size}
@@ -100,6 +125,33 @@ _cache_lock = threading.Lock()
 
 AUDIT_LOG_PATH = os.path.join(os.path.dirname(__file__), "order_audit.log")
 _audit_lock = threading.Lock()
+
+# ---- duplicate-order guard ----
+# A double-click, a double-tap, or an eager double Enter-press (easy to do
+# when going for speed) could otherwise fire two REAL orders for what the
+# user meant as one click. The frontend sends a fresh request_id with every
+# order attempt; if the same id shows up again within the window below, it's
+# rejected outright instead of being processed a second time.
+_seen_request_ids = {}   # request_id -> timestamp
+_request_id_lock = threading.Lock()
+DUPLICATE_REQUEST_WINDOW_S = 10
+
+
+def check_and_record_request_id(request_id):
+    """Returns True if this is a NEW request (proceed), False if it's a
+    duplicate seen within the window (reject)."""
+    if not request_id:
+        return True  # no id supplied (e.g. an older frontend) -- can't dedupe, let it through
+    now = time.time()
+    with _request_id_lock:
+        # prune old entries so this dict never grows unbounded
+        stale = [k for k, ts in _seen_request_ids.items() if now - ts > DUPLICATE_REQUEST_WINDOW_S]
+        for k in stale:
+            del _seen_request_ids[k]
+        if request_id in _seen_request_ids:
+            return False
+        _seen_request_ids[request_id] = now
+        return True
 
 
 def audit(event, **fields):
@@ -352,7 +404,7 @@ def place_market_leg(symbol, side, size, band_pct=None, dry_run=False, skip_dept
 
     result = data.get("result", {})
     order_id = result.get("id")
-    poll_delay = load_settings().get("fill_poll_delay_ms", 50) / 1000.0
+    poll_delay = (settings.get("fast_mode_poll_delay_ms", 25) if skip_depth_check else settings.get("fill_poll_delay_ms", 50)) / 1000.0
     # Fast path: fewer polls — market orders are usually final on the POST response
     max_polls = 2 if skip_depth_check else FILL_POLL_ATTEMPTS
 
@@ -570,6 +622,14 @@ def settings_endpoint():
             current["fill_poll_delay_ms"] = v
         except (ValueError, TypeError):
             return jsonify({"ok": False, "error": "fill_poll_delay_ms must be a non-negative integer"}), 400
+    if "fast_mode_poll_delay_ms" in data:
+        try:
+            v = int(data["fast_mode_poll_delay_ms"])
+            if v < 0:
+                raise ValueError()
+            current["fast_mode_poll_delay_ms"] = v
+        except (ValueError, TypeError):
+            return jsonify({"ok": False, "error": "fast_mode_poll_delay_ms must be a non-negative integer"}), 400
     if "skip_depth_check" in data:
         current["skip_depth_check"] = bool(data["skip_depth_check"])
     if "margin_precheck_enabled" in data:
@@ -867,6 +927,11 @@ def place_spread():
     data = request.get_json(force=True, silent=True) or {}
     leg1 = data.get("leg1")
     leg2 = data.get("leg2")
+
+    request_id = data.get("request_id")
+    if not check_and_record_request_id(request_id):
+        audit("duplicate_request_blocked", request_id=request_id)
+        return jsonify({"ok": False, "error": "Duplicate order request ignored (same request_id seen within the last few seconds) — this is almost always a double-click/double-tap, not two separate orders."}), 409
     ratio = float(data.get("ratio", 1))
     depth_band_pct = float(data.get("depth_band_pct", settings["depth_band_pct"] / 100.0))
 
